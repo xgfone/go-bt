@@ -36,7 +36,7 @@ func (testHandler) OnAnnounce(raddr *net.UDPAddr, req udptracker.AnnounceRequest
 		Interval:  1,
 		Leechers:  2,
 		Seeders:   3,
-		Addresses: []metainfo.Address{{IP: net.ParseIP("127.0.0.1"), Port: 8001}},
+		Addresses: []metainfo.Address{{IP: net.ParseIP("127.0.0.1"), Port: 8000}},
 	}
 	return
 }
@@ -55,7 +55,7 @@ func (testHandler) OnScrap(raddr *net.UDPAddr, infohashes []metainfo.Hash) (
 
 func ExampleClient() {
 	// Start the UDP tracker server
-	sconn, err := net.ListenPacket("udp4", "127.0.0.1:8001")
+	sconn, err := net.ListenPacket("udp4", "127.0.0.1:8000")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func ExampleClient() {
 	time.Sleep(time.Second)
 
 	// Create a client and dial to the UDP tracker server.
-	client, err := NewClient("udp://127.0.0.1:8001/path?a=1&b=2")
+	client, err := NewClient("udp://127.0.0.1:8000/path?a=1&b=2")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func ExampleClient() {
 	// Leechers: 2
 	// Seeders: 3
 	// Address[0].IP: 127.0.0.1
-	// Address[0].Port: 8001
+	// Address[0].Port: 8000
 	// 0101010101010101010101010101010101010101.Seeders: 1
 	// 0101010101010101010101010101010101010101.Leechers: 2
 	// 0101010101010101010101010101010101010101.Completed: 3

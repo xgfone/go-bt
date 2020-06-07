@@ -146,7 +146,7 @@ func ExampleServer() {
 	})
 
 	// Wait that the last get_peers ends.
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 2)
 
 	// Add the peer to let the DHT server1 has the peer.
 	pm.AddPeer(infohash, metainfo.NewAddress(net.ParseIP("127.0.0.1"), 9001))
@@ -164,7 +164,7 @@ func ExampleServer() {
 	})
 
 	// Wait that the recursive call ends.
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 2)
 
 	// Unordered output:
 	// Server1: 2
