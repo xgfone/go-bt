@@ -71,7 +71,7 @@ func (m Magnet) String() string {
 func ParseMagnetURI(uri string) (m Magnet, err error) {
 	u, err := url.Parse(uri)
 	if err != nil {
-		err = fmt.Errorf("error parsing uri: %w", err)
+		err = fmt.Errorf("error parsing uri: %s", err)
 		return
 	} else if u.Scheme != "magnet" {
 		err = fmt.Errorf("unexpected scheme %q", u.Scheme)
@@ -81,7 +81,7 @@ func ParseMagnetURI(uri string) (m Magnet, err error) {
 	q := u.Query()
 	xt := q.Get("xt")
 	if m.InfoHash, err = parseInfohash(q.Get("xt")); err != nil {
-		err = fmt.Errorf("error parsing infohash %q: %w", xt, err)
+		err = fmt.Errorf("error parsing infohash %q: %s", xt, err)
 		return
 	}
 	dropFirst(q, "xt")
@@ -119,7 +119,7 @@ func parseInfohash(xt string) (ih Hash, err error) {
 	}
 
 	if err != nil {
-		err = fmt.Errorf("error decoding xt: %w", err)
+		err = fmt.Errorf("error decoding xt: %s", err)
 	} else if n != 20 {
 		panic(fmt.Errorf("invalid length '%d' of the decoded bytes", n))
 	}
