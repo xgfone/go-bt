@@ -34,6 +34,10 @@ type Handler interface {
 	//
 	// If requires, it should write the response to the peer.
 	OnMessage(conn *PeerConn, msg Message) error
+
+	// OnClose is called when the connection is closed, which may be used
+	// to do some cleaning work by the handler.
+	OnClose(conn *PeerConn)
 }
 
 // Config is used to configure the server.
@@ -141,6 +145,7 @@ func (s *Server) handlePeerMessage(pc *PeerConn) (err error) {
 		return fmt.Errorf("handshake error with '%s': %s", pc.RemoteAddr().String(), err)
 	}
 
+	defer s.h.OnClose(pc)
 	return s.loopRun(pc, s.h)
 }
 
