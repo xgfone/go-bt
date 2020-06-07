@@ -5,7 +5,7 @@ A pure golang implementation of [BitTorrent](http://bittorrent.org/beps/bep_0000
 
 ## Features
 
-- Support `Go1.7+`.
+- Support `Go1.9+`.
 - Support IPv4/IPv6.
 - Pure Go implementation.
 - Multi-BEPs implementation. [See below](#the-implemented-specifications)
