@@ -63,3 +63,46 @@ type files []File
 func (fs files) Len() int           { return len(fs) }
 func (fs files) Less(i, j int) bool { return fs[i].String() < fs[j].String() }
 func (fs files) Swap(i, j int)      { f := fs[i]; fs[i] = fs[j]; fs[j] = f }
+
+// FilePiece represents the piece range used by a file， which is used to
+// calculate the downloaded piece when downloading the file.
+type FilePiece struct {
+	Index  int64 // The index of the current piece.
+	Offset int64 // The offset bytes from the beginning of the current piece.
+	Length int64 // The length of the data.
+}
+
+// FilePieces returns the information of the pieces referred by the file.
+func (f File) FilePieces(info Info) (fps []FilePiece) {
+	if f.Length < 1 {
+		return nil
+	}
+
+	startOffset := f.Offset(info)
+	startPieceIndex := startOffset / info.PieceLength
+	startPieceOffset := startOffset % info.PieceLength
+
+	endOffset := startOffset + f.Length
+	endPieceIndex := endOffset / info.PieceLength
+	endPieceOffset := endOffset % info.PieceLength
+
+	if startPieceIndex == endPieceIndex {
+		return []FilePiece{{
+			Index:  startPieceIndex,
+			Offset: startPieceOffset,
+			Length: endPieceOffset - startPieceOffset,
+		}}
+	}
+
+	fps = make([]FilePiece, 0, endPieceIndex-startPieceIndex)
+	fps = append(fps, FilePiece{
+		Index:  startPieceIndex,
+		Offset: startPieceOffset,
+		Length: info.PieceLength - startPieceOffset,
+	})
+	for i := startPieceIndex + 1; i < endPieceIndex; i++ {
+		fps = append(fps, FilePiece{Index: i, Length: info.PieceLength})
+	}
+	fps = append(fps, FilePiece{Index: endPieceIndex, Length: endPieceOffset})
+	return
+}
