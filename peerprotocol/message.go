@@ -73,6 +73,9 @@ type Message struct {
 	//   BEP 5: Port
 	//
 	Port uint16
+
+	// UnknownTypePayload is the payload of the unknown message type.
+	UnknownTypePayload []byte
 }
 
 // DecodeToMessage is equal to msg.Decode(r, maxLength).
@@ -186,7 +189,8 @@ func (m *Message) Decode(r io.Reader, maxLength uint32) (err error) {
 	case Port:
 		err = binary.Read(lr, binary.BigEndian, &m.Port)
 	default:
-		err = fmt.Errorf("unknown message type %v", m.Type)
+		// err = fmt.Errorf("unknown message type %v", m.Type)
+		m.UnknownTypePayload, err = ioutil.ReadAll(lr)
 	}
 
 	return
@@ -257,12 +261,7 @@ func (m Message) marshalBinaryType(buf *bytes.Buffer) (err error) {
 		if err = binary.Write(buf, binary.BigEndian, m.Begin); err != nil {
 			return
 		}
-
-		if n, err := buf.Write(m.Piece); err != nil {
-			return err
-		} else if _len := len(m.Piece); n != _len {
-			return fmt.Errorf("expect writing %d bytes, but wrote %d", _len, n)
-		}
+		_, err = buf.Write(m.Piece)
 	case Extended:
 		if err = buf.WriteByte(byte(m.ExtendedID)); err != nil {
 			_, err = buf.Write(m.ExtendedPayload)
@@ -270,7 +269,8 @@ func (m Message) marshalBinaryType(buf *bytes.Buffer) (err error) {
 	case Port:
 		err = binary.Write(buf, binary.BigEndian, m.Port)
 	default:
-		err = fmt.Errorf("unknown message type: %v", m.Type)
+		// err = fmt.Errorf("unknown message type: %v", m.Type)
+		_, err = buf.Write(m.UnknownTypePayload)
 	}
 
 	return
