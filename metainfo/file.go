@@ -41,7 +41,10 @@ func (f File) String() string {
 // Path returns the path of the current.
 func (f File) Path(info Info) string {
 	if info.IsDir() {
-		return f.String()
+		paths := make([]string, len(f.Paths)+1)
+		paths[0] = info.Name
+		copy(paths[1:], f.Paths)
+		return filepath.Join(paths...)
 	}
 	return info.Name
 }
@@ -70,6 +73,11 @@ type FilePiece struct {
 	Index  int64 // The index of the current piece.
 	Offset int64 // The offset bytes from the beginning of the current piece.
 	Length int64 // The length of the data.
+}
+
+// TotalOffset return the total offset from the beginning of all the files.
+func (fp FilePiece) TotalOffset(pieceLength int64) int64 {
+	return fp.Index*pieceLength + fp.Offset
 }
 
 // FilePieces returns the information of the pieces referred by the file.
