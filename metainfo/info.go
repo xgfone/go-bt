@@ -127,6 +127,30 @@ func (info Info) Piece(index int) Piece {
 	return Piece{info: info, index: index}
 }
 
+// PieceOffset returns the total offset of the piece.
+//
+// offset is the offset relative to the beginning of the piece.
+func (info Info) PieceOffset(index, offset int64) int64 {
+	return index*info.PieceLength + offset
+}
+
+// GetFileByOffset returns the file and its offset by the total offset.
+func (info Info) GetFileByOffset(offset int64) (file File, fileOffset int64) {
+	if !info.IsDir() {
+		return File{Length: info.Length}, offset
+	}
+
+	fileOffset = offset
+	for _, file = range info.Files {
+		if fileOffset < file.Length {
+			return
+		}
+		fileOffset -= file.Length
+	}
+
+	return
+}
+
 // AllFiles returns all the files.
 //
 // Notice: for the single file, the Path is nil.
