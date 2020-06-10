@@ -49,6 +49,18 @@ func (f File) Path(info Info) string {
 	return info.Name
 }
 
+// PathWithPrefix returns the path of the current with the prefix directory.
+func (f File) PathWithPrefix(prefix string, info Info) string {
+	if info.IsDir() {
+		paths := make([]string, len(f.Paths)+2)
+		paths[0] = prefix
+		paths[1] = info.Name
+		copy(paths[2:], f.Paths)
+		return filepath.Join(paths...)
+	}
+	return filepath.Join(prefix, info.Name)
+}
+
 // Offset returns the offset of the current file from the start.
 func (f File) Offset(info Info) (ret int64) {
 	path := f.Path(info)
