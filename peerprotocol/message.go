@@ -164,8 +164,8 @@ func (m *Message) Decode(r io.Reader, maxLength uint32) (err error) {
 		if _, err = io.ReadFull(lr, bs); err == nil {
 			m.Bitfield = make([]bool, 0, _len*8)
 			for _, b := range bs {
-				for i := byte(7); i >= 0; i-- {
-					m.Bitfield = append(m.Bitfield, (b>>i)&1 == 1)
+				for i := 7; i >= 0; i-- {
+					m.Bitfield = append(m.Bitfield, (b>>byte(i))&1 == 1)
 				}
 			}
 		}

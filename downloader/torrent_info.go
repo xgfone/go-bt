@@ -121,6 +121,9 @@ func NewTorrentDownloader(c ...TorrentDownloaderConfig) *TorrentDownloader {
 }
 
 // Request submits a download request.
+//
+// Notice: the remote peer must support the "ut_metadata" extenstion.
+// Or downloading fails.
 func (d *TorrentDownloader) Request(host string, port uint16, infohash metainfo.Hash) {
 	d.requests <- request{Host: host, Port: port, InfoHash: infohash}
 }
