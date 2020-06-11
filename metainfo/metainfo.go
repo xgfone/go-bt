@@ -143,7 +143,7 @@ func (mi MetaInfo) Announces() AnnounceList {
 }
 
 // Magnet creates a Magnet from a MetaInfo.
-func (mi *MetaInfo) Magnet(displayName string, infoHash Hash) (m Magnet) {
+func (mi MetaInfo) Magnet(displayName string, infoHash Hash) (m Magnet) {
 	for _, t := range mi.Announces().Unique() {
 		m.Trackers = append(m.Trackers, t)
 	}

@@ -130,8 +130,8 @@ func (info Info) Piece(index int) Piece {
 // PieceOffset returns the total offset of the piece.
 //
 // offset is the offset relative to the beginning of the piece.
-func (info Info) PieceOffset(index, offset int64) int64 {
-	return index*info.PieceLength + offset
+func (info Info) PieceOffset(index, offset uint32) int64 {
+	return int64(index)*info.PieceLength + int64(offset)
 }
 
 // GetFileByOffset returns the file and its offset by the total offset.

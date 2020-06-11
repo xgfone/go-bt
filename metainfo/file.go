@@ -79,17 +79,17 @@ func (fs files) Len() int           { return len(fs) }
 func (fs files) Less(i, j int) bool { return fs[i].String() < fs[j].String() }
 func (fs files) Swap(i, j int)      { f := fs[i]; fs[i] = fs[j]; fs[j] = f }
 
-// FilePiece represents the piece range used by a file， which is used to
+// FilePiece represents the piece range used by a file, which is used to
 // calculate the downloaded piece when downloading the file.
 type FilePiece struct {
-	Index  int64 // The index of the current piece.
-	Offset int64 // The offset bytes from the beginning of the current piece.
-	Length int64 // The length of the data.
+	Index  uint32 // The index of the current piece.
+	Offset uint32 // The offset bytes from the beginning of the current piece.
+	Length uint32 // The length of the data.
 }
 
 // TotalOffset return the total offset from the beginning of all the files.
 func (fp FilePiece) TotalOffset(pieceLength int64) int64 {
-	return fp.Index*pieceLength + fp.Offset
+	return int64(fp.Index)*pieceLength + int64(fp.Offset)
 }
 
 // FilePieces returns the information of the pieces referred by the file.
@@ -108,21 +108,21 @@ func (f File) FilePieces(info Info) (fps []FilePiece) {
 
 	if startPieceIndex == endPieceIndex {
 		return []FilePiece{{
-			Index:  startPieceIndex,
-			Offset: startPieceOffset,
-			Length: endPieceOffset - startPieceOffset,
+			Index:  uint32(startPieceIndex),
+			Offset: uint32(startPieceOffset),
+			Length: uint32(endPieceOffset - startPieceOffset),
 		}}
 	}
 
 	fps = make([]FilePiece, 0, endPieceIndex-startPieceIndex)
 	fps = append(fps, FilePiece{
-		Index:  startPieceIndex,
-		Offset: startPieceOffset,
-		Length: info.PieceLength - startPieceOffset,
+		Index:  uint32(startPieceIndex),
+		Offset: uint32(startPieceOffset),
+		Length: uint32(info.PieceLength - startPieceOffset),
 	})
 	for i := startPieceIndex + 1; i < endPieceIndex; i++ {
-		fps = append(fps, FilePiece{Index: i, Length: info.PieceLength})
+		fps = append(fps, FilePiece{Index: uint32(i), Length: uint32(info.PieceLength)})
 	}
-	fps = append(fps, FilePiece{Index: endPieceIndex, Length: endPieceOffset})
+	fps = append(fps, FilePiece{Index: uint32(endPieceIndex), Length: uint32(endPieceOffset)})
 	return
 }
