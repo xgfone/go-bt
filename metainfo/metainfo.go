@@ -143,9 +143,20 @@ func (mi MetaInfo) Announces() AnnounceList {
 }
 
 // Magnet creates a Magnet from a MetaInfo.
+//
+// If displayName or infoHash is empty, it will be got from the info part.
 func (mi MetaInfo) Magnet(displayName string, infoHash Hash) (m Magnet) {
 	for _, t := range mi.Announces().Unique() {
 		m.Trackers = append(m.Trackers, t)
+	}
+
+	if displayName == "" {
+		info, _ := mi.Info()
+		displayName = info.Name
+	}
+
+	if infoHash.IsZero() {
+		infoHash = mi.InfoHash()
 	}
 
 	m.DisplayName = displayName
