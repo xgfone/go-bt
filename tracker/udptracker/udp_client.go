@@ -16,6 +16,7 @@ package udptracker
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -27,33 +28,30 @@ import (
 	"github.com/xgfone/bt/metainfo"
 )
 
-// NewTrackerClientByDial returns a new TrackerClient by dialing.
-func NewTrackerClientByDial(network, address string, c ...TrackerClientConfig) (
-	*TrackerClient, error) {
+// NewClientByDial returns a new Client by dialing.
+func NewClientByDial(network, address string, c ...ClientConfig) (*Client, error) {
 	conn, err := net.Dial(network, address)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewTrackerClient(conn.(*net.UDPConn), c...), nil
+	return NewClient(conn.(*net.UDPConn), c...), nil
 }
 
-// NewTrackerClient returns a new TrackerClient.
-func NewTrackerClient(conn *net.UDPConn, c ...TrackerClientConfig) *TrackerClient {
-	var conf TrackerClientConfig
+// NewClient returns a new Client.
+func NewClient(conn *net.UDPConn, c ...ClientConfig) *Client {
+	var conf ClientConfig
 	conf.set(c...)
 	ipv4 := strings.Contains(conn.LocalAddr().String(), ".")
-	return &TrackerClient{conn: conn, conf: conf, ipv4: ipv4}
+	return &Client{conn: conn, conf: conf, ipv4: ipv4}
 }
 
-// TrackerClientConfig is used to configure the TrackerClient.
-type TrackerClientConfig struct {
-	// ReadTimeout is used to receive the response.
-	ReadTimeout time.Duration // Default: 5s
-	MaxBufSize  int           // Default: 2048
+// ClientConfig is used to configure the Client.
+type ClientConfig struct {
+	MaxBufSize int // Default: 2048
 }
 
-func (c *TrackerClientConfig) set(conf ...TrackerClientConfig) {
+func (c *ClientConfig) set(conf ...ClientConfig) {
 	if len(conf) > 0 {
 		*c = conf[0]
 	}
@@ -61,20 +59,17 @@ func (c *TrackerClientConfig) set(conf ...TrackerClientConfig) {
 	if c.MaxBufSize <= 0 {
 		c.MaxBufSize = 2048
 	}
-	if c.ReadTimeout <= 0 {
-		c.ReadTimeout = time.Second * 5
-	}
 }
 
-// TrackerClient is a tracker client based on UDP.
+// Client is a tracker client based on UDP.
 //
 // Notice: the request is synchronized, that's, the last request is not returned,
 // the next request must not be sent.
 //
 // BEP 15
-type TrackerClient struct {
+type Client struct {
 	ipv4 bool
-	conf TrackerClientConfig
+	conf ClientConfig
 	conn *net.UDPConn
 	last time.Time
 	cid  uint64
@@ -82,24 +77,39 @@ type TrackerClient struct {
 }
 
 // Close closes the UDP tracker client.
-func (utc *TrackerClient) Close() { utc.conn.Close() }
+func (utc *Client) Close() error   { return utc.conn.Close() }
+func (utc *Client) String() string { return utc.conn.RemoteAddr().String() }
 
-func (utc *TrackerClient) readResp(b []byte) (int, error) {
-	utc.conn.SetReadDeadline(time.Now().Add(utc.conf.ReadTimeout))
-	return utc.conn.Read(b)
+func (utc *Client) readResp(ctx context.Context, b []byte) (int, error) {
+	done := make(chan struct{})
+
+	var n int
+	var err error
+	go func() {
+		n, err = utc.conn.Read(b)
+		close(done)
+	}()
+
+	select {
+	case <-ctx.Done():
+		utc.conn.SetReadDeadline(time.Now())
+		return n, ctx.Err()
+	case <-done:
+		return n, err
+	}
 }
 
-func (utc *TrackerClient) getTranID() uint32 {
+func (utc *Client) getTranID() uint32 {
 	return atomic.AddUint32(&utc.tid, 1)
 }
 
-func (utc *TrackerClient) parseError(b []byte) (tid uint32, reason string) {
+func (utc *Client) parseError(b []byte) (tid uint32, reason string) {
 	tid = binary.BigEndian.Uint32(b[:4])
 	reason = string(b[4:])
 	return
 }
 
-func (utc *TrackerClient) send(b []byte) (err error) {
+func (utc *Client) send(b []byte) (err error) {
 	n, err := utc.conn.Write(b)
 	if err == nil && n < len(b) {
 		err = io.ErrShortWrite
@@ -107,7 +117,7 @@ func (utc *TrackerClient) send(b []byte) (err error) {
 	return
 }
 
-func (utc *TrackerClient) connect() (err error) {
+func (utc *Client) connect(ctx context.Context) (err error) {
 	tid := utc.getTranID()
 	buf := bytes.NewBuffer(make([]byte, 0, 16))
 	binary.Write(buf, binary.BigEndian, ProtocolID)
@@ -118,7 +128,7 @@ func (utc *TrackerClient) connect() (err error) {
 	}
 
 	data := make([]byte, 32)
-	n, err := utc.readResp(data)
+	n, err := utc.readResp(ctx, data)
 	if err != nil {
 		return
 	} else if n < 8 {
@@ -148,18 +158,19 @@ func (utc *TrackerClient) connect() (err error) {
 	return
 }
 
-func (utc *TrackerClient) getConnectionID() (cid uint64, err error) {
+func (utc *Client) getConnectionID(ctx context.Context) (cid uint64, err error) {
 	cid = utc.cid
 	if time.Now().Sub(utc.last) > time.Minute {
-		if err = utc.connect(); err == nil {
+		if err = utc.connect(ctx); err == nil {
 			cid = utc.cid
 		}
 	}
 	return
 }
 
-func (utc *TrackerClient) announce(req AnnounceRequest) (r AnnounceResponse, err error) {
-	cid, err := utc.getConnectionID()
+func (utc *Client) announce(ctx context.Context, req AnnounceRequest) (
+	r AnnounceResponse, err error) {
+	cid, err := utc.getConnectionID(ctx)
 	if err != nil {
 		return
 	}
@@ -176,7 +187,7 @@ func (utc *TrackerClient) announce(req AnnounceRequest) (r AnnounceResponse, err
 	}
 
 	data := make([]byte, utc.conf.MaxBufSize)
-	n, err := utc.readResp(data)
+	n, err := utc.readResp(ctx, data)
 	if err != nil {
 		return
 	} else if n < 8 {
@@ -217,22 +228,23 @@ func (utc *TrackerClient) announce(req AnnounceRequest) (r AnnounceResponse, err
 //      then send the ANNOUNCE request.
 //   2. If returning an error, you should retry it.
 //      See http://www.bittorrent.org/beps/bep_0015.html#time-outs
-func (utc *TrackerClient) Announce(r AnnounceRequest) (AnnounceResponse, error) {
-	return utc.announce(r)
+func (utc *Client) Announce(c context.Context, r AnnounceRequest) (AnnounceResponse, error) {
+	return utc.announce(c, r)
 }
 
-func (utc *TrackerClient) scrape(infohashes []metainfo.Hash) (rs []ScrapeResponse, err error) {
-	cid, err := utc.getConnectionID()
+func (utc *Client) scrape(c context.Context, ihs []metainfo.Hash) (
+	rs []ScrapeResponse, err error) {
+	cid, err := utc.getConnectionID(c)
 	if err != nil {
 		return
 	}
 
 	tid := utc.getTranID()
-	buf := bytes.NewBuffer(make([]byte, 0, 16+len(infohashes)*20))
+	buf := bytes.NewBuffer(make([]byte, 0, 16+len(ihs)*20))
 	binary.Write(buf, binary.BigEndian, cid)
 	binary.Write(buf, binary.BigEndian, ActionScrape)
 	binary.Write(buf, binary.BigEndian, tid)
-	for _, h := range infohashes {
+	for _, h := range ihs {
 		buf.Write(h[:])
 	}
 	if err = utc.send(buf.Bytes()); err != nil {
@@ -240,7 +252,7 @@ func (utc *TrackerClient) scrape(infohashes []metainfo.Hash) (rs []ScrapeRespons
 	}
 
 	data := make([]byte, utc.conf.MaxBufSize)
-	n, err := utc.readResp(data)
+	n, err := utc.readResp(c, data)
 	if err != nil {
 		return
 	} else if n < 8 {
@@ -284,6 +296,6 @@ func (utc *TrackerClient) scrape(infohashes []metainfo.Hash) (rs []ScrapeRespons
 //      then send the ANNOUNCE request.
 //   2. If returning an error, you should retry it.
 //      See http://www.bittorrent.org/beps/bep_0015.html#time-outs
-func (utc *TrackerClient) Scrape(hs []metainfo.Hash) ([]ScrapeResponse, error) {
-	return utc.scrape(hs)
+func (utc *Client) Scrape(c context.Context, hs []metainfo.Hash) ([]ScrapeResponse, error) {
+	return utc.scrape(c, hs)
 }

@@ -20,6 +20,7 @@
 package httptracker
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/url"
@@ -115,7 +116,7 @@ func (r AnnounceRequest) ToQuery() (vs url.Values) {
 	if r.Port > 0 {
 		vs.Set("port", strconv.FormatUint(uint64(r.Port), 10))
 	}
-	if r.NumWant > 0 {
+	if r.NumWant != 0 {
 		vs.Set("numwant", strconv.FormatUint(uint64(r.NumWant), 10))
 	}
 	if r.Key != 0 {
@@ -264,24 +265,28 @@ func (sr ScrapeResponse) EncodeTo(w io.Writer) (err error) {
 	return bencode.NewEncoder(w).Encode(sr)
 }
 
-// TrackerClient represents a tracker client based on HTTP/HTTPS.
-type TrackerClient struct {
+// Client represents a tracker client based on HTTP/HTTPS.
+type Client struct {
 	AnnounceURL string
 	ScrapeURL   string
 }
 
-// NewTrackerClient returns a new HTTPTrackerClient.
+// NewClient returns a new HTTPClient.
 //
 // scrapeURL may be empty, which will replace the "announce" in announceURL
 // with "scrape" to generate the scrapeURL.
-func NewTrackerClient(announceURL, scrapeURL string) *TrackerClient {
+func NewClient(announceURL, scrapeURL string) *Client {
 	if scrapeURL == "" {
 		scrapeURL = strings.Replace(announceURL, "announce", "scrape", -1)
 	}
-	return &TrackerClient{AnnounceURL: announceURL, ScrapeURL: scrapeURL}
+	return &Client{AnnounceURL: announceURL, ScrapeURL: scrapeURL}
 }
 
-func (t *TrackerClient) send(u string, vs url.Values, r interface{}) (err error) {
+// Close closes the client, which does nothing at present.
+func (t *Client) Close() error   { return nil }
+func (t *Client) String() string { return t.AnnounceURL }
+
+func (t *Client) send(c context.Context, u string, vs url.Values, r interface{}) (err error) {
 	sym := "?"
 	if strings.IndexByte(u, '?') > 0 {
 		sym = "&"
@@ -296,17 +301,19 @@ func (t *TrackerClient) send(u string, vs url.Values, r interface{}) (err error)
 }
 
 // Announce sends a Announce request to the tracker.
-func (t *TrackerClient) Announce(req AnnounceRequest) (resp AnnounceResponse, err error) {
-	err = t.send(t.AnnounceURL, req.ToQuery(), &resp)
+func (t *Client) Announce(c context.Context, req AnnounceRequest) (
+	resp AnnounceResponse, err error) {
+	err = t.send(c, t.AnnounceURL, req.ToQuery(), &resp)
 	return
 }
 
 // Scrape sends a Scrape request to the tracker.
-func (t *TrackerClient) Scrape(infohashes []metainfo.Hash) (resp ScrapeResponse, err error) {
+func (t *Client) Scrape(c context.Context, infohashes []metainfo.Hash) (
+	resp ScrapeResponse, err error) {
 	hs := make([]string, len(infohashes))
 	for i, h := range infohashes {
 		hs[i] = h.BytesString()
 	}
-	err = t.send(t.ScrapeURL, url.Values{"info_hash": hs}, &resp)
+	err = t.send(c, t.ScrapeURL, url.Values{"info_hash": hs}, &resp)
 	return
 }

@@ -15,6 +15,7 @@
 package udptracker
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -66,13 +67,13 @@ func (testHandler) OnScrap(raddr *net.UDPAddr, infohashes []metainfo.Hash) (
 	return
 }
 
-func ExampleTrackerClient() {
+func ExampleClient() {
 	// Start the UDP tracker server
 	sconn, err := net.ListenPacket("udp4", "127.0.0.1:8001")
 	if err != nil {
 		log.Fatal(err)
 	}
-	server := NewTrackerServer(sconn, testHandler{})
+	server := NewServer(sconn, testHandler{})
 	defer server.Close()
 	go server.Run()
 
@@ -80,7 +81,7 @@ func ExampleTrackerClient() {
 	time.Sleep(time.Second)
 
 	// Create a client and dial to the UDP tracker server.
-	client, err := NewTrackerClientByDial("udp4", "127.0.0.1:8001")
+	client, err := NewClientByDial("udp4", "127.0.0.1:8001")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -89,7 +90,7 @@ func ExampleTrackerClient() {
 	// and get the ANNOUNCE response.
 	exts := []Extension{NewURLData([]byte("data")), NewNop()}
 	req := AnnounceRequest{IP: net.ParseIP("127.0.0.1"), Port: 80, Exts: exts}
-	resp, err := client.Announce(req)
+	resp, err := client.Announce(context.Background(), req)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -105,7 +106,7 @@ func ExampleTrackerClient() {
 	// Send the SCRAPE request to the UDP tracker server,
 	// and get the SCRAPE respsone.
 	hs := []metainfo.Hash{metainfo.NewRandomHash(), metainfo.NewRandomHash()}
-	rs, err := client.Scrape(hs)
+	rs, err := client.Scrape(context.Background(), hs)
 	if err != nil {
 		log.Fatal(err)
 	} else if len(rs) != 2 {

@@ -27,8 +27,8 @@ import (
 	"github.com/xgfone/bt/metainfo"
 )
 
-// TrackerServerHandler is used to handle the request from the client.
-type TrackerServerHandler interface {
+// ServerHandler is used to handle the request from the client.
+type ServerHandler interface {
 	// OnConnect is used to check whether to make the connection or not.
 	OnConnect(raddr *net.UDPAddr) (err error)
 	OnAnnounce(raddr *net.UDPAddr, req AnnounceRequest) (AnnounceResponse, error)
@@ -45,13 +45,13 @@ type wrappedPeerAddr struct {
 	Time time.Time
 }
 
-// TrackerServerConfig is used to configure the TrackerServer.
-type TrackerServerConfig struct {
+// ServerConfig is used to configure the Server.
+type ServerConfig struct {
 	MaxBufSize int                                      // Default: 2048
 	ErrorLog   func(format string, args ...interface{}) // Default: log.Printf
 }
 
-func (c *TrackerServerConfig) setDefault() {
+func (c *ServerConfig) setDefault() {
 	if c.MaxBufSize <= 0 {
 		c.MaxBufSize = 2048
 	}
@@ -60,11 +60,11 @@ func (c *TrackerServerConfig) setDefault() {
 	}
 }
 
-// TrackerServer is a tracker server based on UDP.
-type TrackerServer struct {
+// Server is a tracker server based on UDP.
+type Server struct {
 	conn    net.PacketConn
-	conf    TrackerServerConfig
-	handler TrackerServerHandler
+	conf    ServerConfig
+	handler ServerHandler
 	bufpool sync.Pool
 
 	cid   uint64
@@ -73,16 +73,15 @@ type TrackerServer struct {
 	conns map[uint64]wrappedPeerAddr
 }
 
-// NewTrackerServer returns a new TrackerServer.
-func NewTrackerServer(c net.PacketConn, h TrackerServerHandler,
-	config ...TrackerServerConfig) *TrackerServer {
-	var conf TrackerServerConfig
-	if len(config) > 0 {
-		conf = config[0]
+// NewServer returns a new Server.
+func NewServer(c net.PacketConn, h ServerHandler, sc ...ServerConfig) *Server {
+	var conf ServerConfig
+	if len(sc) > 0 {
+		conf = sc[0]
 	}
 	conf.setDefault()
 
-	s := &TrackerServer{
+	s := &Server{
 		conf:    conf,
 		conn:    c,
 		handler: h,
@@ -95,7 +94,7 @@ func NewTrackerServer(c net.PacketConn, h TrackerServerHandler,
 }
 
 // Close closes the tracker server.
-func (uts *TrackerServer) Close() {
+func (uts *Server) Close() {
 	select {
 	case <-uts.exit:
 	default:
@@ -104,7 +103,7 @@ func (uts *TrackerServer) Close() {
 	}
 }
 
-func (uts *TrackerServer) cleanConnectionID(interval time.Duration) {
+func (uts *Server) cleanConnectionID(interval time.Duration) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	for {
@@ -124,7 +123,7 @@ func (uts *TrackerServer) cleanConnectionID(interval time.Duration) {
 }
 
 // Run starts the tracker server.
-func (uts *TrackerServer) Run() {
+func (uts *Server) Run() {
 	go uts.cleanConnectionID(time.Minute * 2)
 	for {
 		buf := uts.bufpool.Get().([]byte)
@@ -141,12 +140,12 @@ func (uts *TrackerServer) Run() {
 	}
 }
 
-func (uts *TrackerServer) handleRequest(raddr *net.UDPAddr, buf []byte, n int) {
+func (uts *Server) handleRequest(raddr *net.UDPAddr, buf []byte, n int) {
 	defer uts.bufpool.Put(buf)
 	uts.handlePacket(raddr, buf[:n])
 }
 
-func (uts *TrackerServer) send(raddr *net.UDPAddr, b []byte) {
+func (uts *Server) send(raddr *net.UDPAddr, b []byte) {
 	n, err := uts.conn.WriteTo(b, raddr)
 	if err != nil {
 		uts.conf.ErrorLog("fail to send the udp tracker response to '%s': %s",
@@ -156,18 +155,18 @@ func (uts *TrackerServer) send(raddr *net.UDPAddr, b []byte) {
 	}
 }
 
-func (uts *TrackerServer) getConnectionID() uint64 {
+func (uts *Server) getConnectionID() uint64 {
 	return atomic.AddUint64(&uts.cid, 1)
 }
 
-func (uts *TrackerServer) addConnection(cid uint64, raddr *net.UDPAddr) {
+func (uts *Server) addConnection(cid uint64, raddr *net.UDPAddr) {
 	now := time.Now()
 	uts.lock.Lock()
 	uts.conns[cid] = wrappedPeerAddr{Addr: raddr, Time: now}
 	uts.lock.Unlock()
 }
 
-func (uts *TrackerServer) checkConnection(cid uint64, raddr *net.UDPAddr) (ok bool) {
+func (uts *Server) checkConnection(cid uint64, raddr *net.UDPAddr) (ok bool) {
 	uts.lock.RLock()
 	if w, _ok := uts.conns[cid]; _ok && w.Addr.Port == raddr.Port &&
 		bytes.Equal(w.Addr.IP, raddr.IP) {
@@ -177,21 +176,21 @@ func (uts *TrackerServer) checkConnection(cid uint64, raddr *net.UDPAddr) (ok bo
 	return
 }
 
-func (uts *TrackerServer) sendError(raddr *net.UDPAddr, tid uint32, reason string) {
+func (uts *Server) sendError(raddr *net.UDPAddr, tid uint32, reason string) {
 	buf := bytes.NewBuffer(make([]byte, 0, 8+len(reason)))
 	encodeResponseHeader(buf, ActionError, tid)
 	buf.WriteString(reason)
 	uts.send(raddr, buf.Bytes())
 }
 
-func (uts *TrackerServer) sendConnResp(raddr *net.UDPAddr, tid uint32, cid uint64) {
+func (uts *Server) sendConnResp(raddr *net.UDPAddr, tid uint32, cid uint64) {
 	buf := bytes.NewBuffer(make([]byte, 0, 16))
 	encodeResponseHeader(buf, ActionConnect, tid)
 	binary.Write(buf, binary.BigEndian, cid)
 	uts.send(raddr, buf.Bytes())
 }
 
-func (uts *TrackerServer) sendAnnounceResp(raddr *net.UDPAddr, tid uint32,
+func (uts *Server) sendAnnounceResp(raddr *net.UDPAddr, tid uint32,
 	resp AnnounceResponse) {
 	buf := bytes.NewBuffer(make([]byte, 0, 8+12+len(resp.Addresses)*18))
 	encodeResponseHeader(buf, ActionAnnounce, tid)
@@ -199,7 +198,7 @@ func (uts *TrackerServer) sendAnnounceResp(raddr *net.UDPAddr, tid uint32,
 	uts.send(raddr, buf.Bytes())
 }
 
-func (uts *TrackerServer) sendScrapResp(raddr *net.UDPAddr, tid uint32,
+func (uts *Server) sendScrapResp(raddr *net.UDPAddr, tid uint32,
 	rs []ScrapeResponse) {
 	buf := bytes.NewBuffer(make([]byte, 0, 8+len(rs)*12))
 	encodeResponseHeader(buf, ActionScrape, tid)
@@ -209,7 +208,7 @@ func (uts *TrackerServer) sendScrapResp(raddr *net.UDPAddr, tid uint32,
 	uts.send(raddr, buf.Bytes())
 }
 
-func (uts *TrackerServer) handlePacket(raddr *net.UDPAddr, b []byte) {
+func (uts *Server) handlePacket(raddr *net.UDPAddr, b []byte) {
 	cid := binary.BigEndian.Uint64(b[:8])
 	action := binary.BigEndian.Uint32(b[8:12])
 	tid := binary.BigEndian.Uint32(b[12:16])

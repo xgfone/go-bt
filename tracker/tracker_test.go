@@ -15,6 +15,7 @@
 package tracker
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -73,7 +74,7 @@ func ExampleClient() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	server := udptracker.NewTrackerServer(sconn, testHandler{})
+	server := udptracker.NewServer(sconn, testHandler{})
 	defer server.Close()
 	go server.Run()
 
@@ -89,7 +90,7 @@ func ExampleClient() {
 	// Send the ANNOUNCE request to the UDP tracker server,
 	// and get the ANNOUNCE response.
 	req := AnnounceRequest{IP: net.ParseIP("127.0.0.1"), Port: 80}
-	resp, err := client.Announce(req)
+	resp, err := client.Announce(context.Background(), req)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -106,7 +107,7 @@ func ExampleClient() {
 	// and get the SCRAPE respsone.
 	h1 := metainfo.Hash{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
 	h2 := metainfo.Hash{2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}
-	rs, err := client.Scrape([]metainfo.Hash{h1, h2})
+	rs, err := client.Scrape(context.Background(), []metainfo.Hash{h1, h2})
 	if err != nil {
 		log.Fatal(err)
 	} else if len(rs) != 2 {

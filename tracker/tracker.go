@@ -18,6 +18,7 @@ package tracker
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -43,18 +44,18 @@ const (
 //
 // BEP 3, 15
 type AnnounceRequest struct {
-	InfoHash metainfo.Hash
-	PeerID   metainfo.Hash
+	InfoHash metainfo.Hash // Required
+	PeerID   metainfo.Hash // Required
 
-	Uploaded   int64
-	Downloaded int64
-	Left       int64
-	Event      uint32
+	Uploaded   int64  // Required, but default: 0, which should be only used for test or first.
+	Downloaded int64  // Required, but default: 0, which should be only used for test or first.
+	Left       int64  // Required, but default: 0, which should be only used for test or last.
+	Event      uint32 // Required, but default: 0
 
-	IP      net.IP
-	Key     int32
-	NumWant int32 // -1 for default
-	Port    uint16
+	IP      net.IP // Optional
+	Key     int32  // Optional
+	NumWant int32  // Optional, BEP 15: -1 for default. But we use 0 as default.
+	Port    uint16 // Optional
 }
 
 // ToHTTPAnnounceRequest creates a new httptracker.AnnounceRequest from itself.
@@ -187,8 +188,10 @@ func (sr ScrapeResponse) FromUDPScrapeResponse(hs []metainfo.Hash,
 
 // Client is the interface of BT tracker client.
 type Client interface {
-	Announce(AnnounceRequest) (AnnounceResponse, error)
-	Scrape([]metainfo.Hash) (ScrapeResponse, error)
+	Announce(context.Context, AnnounceRequest) (AnnounceResponse, error)
+	Scrape(context.Context, []metainfo.Hash) (ScrapeResponse, error)
+	String() string
+	Close() error
 }
 
 // NewClient returns a new Client.
@@ -197,16 +200,16 @@ func NewClient(connURL string) (c Client, err error) {
 	if err == nil {
 		switch u.Scheme {
 		case "http", "https":
-			c = &tclient{http: httptracker.NewTrackerClient(connURL, "")}
+			c = &tclient{url: connURL, http: httptracker.NewClient(connURL, "")}
 		case "udp", "udp4", "udp6":
-			var utc *udptracker.TrackerClient
-			utc, err = udptracker.NewTrackerClientByDial(u.Scheme, u.Host)
+			var utc *udptracker.Client
+			utc, err = udptracker.NewClientByDial(u.Scheme, u.Host)
 			if err == nil {
 				var e []udptracker.Extension
 				if p := u.RequestURI(); p != "" {
 					e = []udptracker.Extension{udptracker.NewURLData([]byte(p))}
 				}
-				c = &tclient{exts: e, udp: utc}
+				c = &tclient{url: connURL, exts: e, udp: utc}
 			}
 		default:
 			err = fmt.Errorf("unknown url scheme '%s'", u.Scheme)
@@ -216,15 +219,25 @@ func NewClient(connURL string) (c Client, err error) {
 }
 
 type tclient struct {
-	http *httptracker.TrackerClient // BEP 3
-	udp  *udptracker.TrackerClient  // BEP 15
-	exts []udptracker.Extension     // BEP 41
+	url  string
+	http *httptracker.Client    // BEP 3
+	udp  *udptracker.Client     // BEP 15
+	exts []udptracker.Extension // BEP 41
 }
 
-func (c *tclient) Announce(req AnnounceRequest) (resp AnnounceResponse, err error) {
+func (c *tclient) String() string { return c.url }
+
+func (c *tclient) Close() error {
+	if c.http != nil {
+		return c.http.Close()
+	}
+	return c.udp.Close()
+}
+
+func (c *tclient) Announce(ctx context.Context, req AnnounceRequest) (resp AnnounceResponse, err error) {
 	if c.http != nil {
 		var r httptracker.AnnounceResponse
-		if r, err = c.http.Announce(req.ToHTTPAnnounceRequest()); err != nil {
+		if r, err = c.http.Announce(ctx, req.ToHTTPAnnounceRequest()); err != nil {
 			return
 		} else if r.FailureReason != "" {
 			err = errors.New(r.FailureReason)
@@ -236,17 +249,17 @@ func (c *tclient) Announce(req AnnounceRequest) (resp AnnounceResponse, err erro
 
 	r := req.ToUDPAnnounceRequest()
 	r.Exts = c.exts
-	rs, err := c.udp.Announce(r)
+	rs, err := c.udp.Announce(ctx, r)
 	if err == nil {
 		resp.FromUDPAnnounceResponse(rs)
 	}
 	return
 }
 
-func (c *tclient) Scrape(hs []metainfo.Hash) (resp ScrapeResponse, err error) {
+func (c *tclient) Scrape(ctx context.Context, hs []metainfo.Hash) (resp ScrapeResponse, err error) {
 	if c.http != nil {
 		var r httptracker.ScrapeResponse
-		if r, err = c.http.Scrape(hs); err != nil {
+		if r, err = c.http.Scrape(ctx, hs); err != nil {
 			return
 		} else if r.FailureReason != "" {
 			err = errors.New(r.FailureReason)
@@ -257,7 +270,7 @@ func (c *tclient) Scrape(hs []metainfo.Hash) (resp ScrapeResponse, err error) {
 		return
 	}
 
-	r, err := c.udp.Scrape(hs)
+	r, err := c.udp.Scrape(ctx, hs)
 	if err == nil {
 		resp = make(ScrapeResponse, len(r))
 		resp.FromUDPScrapeResponse(hs, r)
