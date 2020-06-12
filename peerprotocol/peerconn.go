@@ -27,6 +27,7 @@ import (
 
 // Predefine some errors about extension support.
 var (
+	ErrNotFirstMsg        = fmt.Errorf("not the first message")
 	ErrNotSupportDHT      = fmt.Errorf("not support DHT extension")
 	ErrNotSupportFast     = fmt.Errorf("not support Fast extension")
 	ErrNotSupportExtended = fmt.Errorf("not support Extended extension")
@@ -78,18 +79,14 @@ type Bep10Handler interface {
 // PeerConn is used to manage the connection to the peer.
 type PeerConn struct {
 	net.Conn
-	ExtensionBits
-	ID metainfo.Hash
 
-	// Timeout is used to control the timeout of reading/writing the message.
-	//
-	// The default is 0, which represents no timeout.
-	Timeout time.Duration
+	InfoHash metainfo.Hash
 
-	// MaxLength is used to limit the maximum number of the message body.
-	//
-	// The default is 0, which represents no limit.
-	MaxLength uint32
+	ID      metainfo.Hash // The ID of the local peer.
+	ExtBits ExtensionBits // The extension bits of the local peer.
+
+	PeerID      metainfo.Hash // The ID of the remote peer.
+	PeerExtBits ExtensionBits // The extension bits of the remote peer.
 
 	// These two states is controlled by the local client peer.
 	//
@@ -121,20 +118,42 @@ type PeerConn struct {
 	PeerChoked     bool // The default should be true.
 	PeerInterested bool
 
+	// Timeout is used to control the timeout of reading/writing the message.
+	//
+	// The default is 0, which represents no timeout.
+	Timeout time.Duration
+
+	// MaxLength is used to limit the maximum number of the message body.
+	//
+	// The default is 0, which represents no limit.
+	MaxLength uint32
+
 	// Data is used to store the context data associated with the connection.
 	Data interface{}
+
+	notFirstMsg bool
 }
 
 // NewPeerConn returns a new PeerConn.
-func NewPeerConn(id metainfo.Hash, conn net.Conn) *PeerConn {
-	return &PeerConn{ID: id, Conn: conn, Choked: true, PeerChoked: true}
+//
+// Notice: conn and id must not be empty, and infohash may be empty
+// for the peer server, but not for the peer client.
+func NewPeerConn(conn net.Conn, id, infohash metainfo.Hash) *PeerConn {
+	return &PeerConn{
+		Conn:       conn,
+		ID:         id,
+		InfoHash:   infohash,
+		Choked:     true,
+		PeerChoked: true,
+		MaxLength:  256 * 1024, // 256KB
+	}
 }
 
 // NewPeerConnByDial returns a new PeerConn by dialing to addr with the "tcp" network.
-func NewPeerConnByDial(id metainfo.Hash, addr string) (pc *PeerConn, err error) {
+func NewPeerConnByDial(addr string, id, infohash metainfo.Hash) (pc *PeerConn, err error) {
 	conn, err := net.Dial("tcp", addr)
 	if err == nil {
-		pc = NewPeerConn(id, conn)
+		pc = NewPeerConn(conn, id, infohash)
 	}
 	return
 }
@@ -206,10 +225,22 @@ func (pc *PeerConn) SetNotInterested() (err error) {
 // Handshake does a handshake with the peer.
 //
 // BEP 3
-func (pc *PeerConn) Handshake(infoHash metainfo.Hash) (HandshakeMsg, error) {
-	m := HandshakeMsg{ExtensionBits: pc.ExtensionBits, PeerID: pc.ID, InfoHash: infoHash}
+func (pc *PeerConn) Handshake() error {
+	m := HandshakeMsg{ExtensionBits: pc.ExtBits, PeerID: pc.ID, InfoHash: pc.InfoHash}
 	pc.setReadTimeout()
-	return Handshake(pc.Conn, m)
+	rhm, err := Handshake(pc.Conn, m)
+	if err == nil {
+		pc.PeerID = rhm.PeerID
+		pc.PeerExtBits = rhm.ExtensionBits
+		if pc.InfoHash.IsZero() {
+			pc.InfoHash = rhm.InfoHash
+		} else if pc.InfoHash != rhm.InfoHash {
+			return fmt.Errorf("inconsistent infohash: local(%s)=%s, remote(%s)=%s",
+				pc.Conn.LocalAddr().String(), pc.InfoHash.String(),
+				pc.Conn.RemoteAddr().String(), rhm.InfoHash.String())
+		}
+	}
+	return err
 }
 
 // ReadMsg reads the message.
@@ -414,7 +445,9 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 			err = handler.OnMessage(pc, msg)
 		}
 	case Bitfield:
-		if h, ok := handler.(Bep3Handler); ok {
+		if pc.notFirstMsg {
+			err = ErrNotFirstMsg
+		} else if h, ok := handler.(Bep3Handler); ok {
 			err = h.Bitfield(pc, msg.Bitfield)
 		} else {
 			err = handler.OnMessage(pc, msg)
@@ -440,8 +473,8 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 
 	// BEP 5 - DHT Protocol
 	case Port:
-		if !pc.IsSupportDHT() {
-			return ErrNotSupportDHT
+		if !pc.ExtBits.IsSupportDHT() {
+			err = ErrNotSupportDHT
 		} else if h, ok := handler.(Bep5Handler); ok {
 			err = h.Port(pc, msg.Port)
 		} else {
@@ -450,40 +483,44 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 
 	// BEP 6 - Fast Extension
 	case Suggest:
-		if !pc.IsSupportFast() {
-			return ErrNotSupportFast
+		if !pc.ExtBits.IsSupportFast() {
+			err = ErrNotSupportFast
 		} else if h, ok := handler.(Bep6Handler); ok {
 			err = h.Suggest(pc, msg.Index)
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}
 	case HaveAll:
-		if !pc.IsSupportFast() {
-			return ErrNotSupportFast
+		if pc.notFirstMsg {
+			err = ErrNotFirstMsg
+		} else if !pc.ExtBits.IsSupportFast() {
+			err = ErrNotSupportFast
 		} else if h, ok := handler.(Bep6Handler); ok {
 			err = h.HaveAll(pc)
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}
 	case HaveNone:
-		if !pc.IsSupportFast() {
-			return ErrNotSupportFast
+		if pc.notFirstMsg {
+			err = ErrNotFirstMsg
+		} else if !pc.ExtBits.IsSupportFast() {
+			err = ErrNotSupportFast
 		} else if h, ok := handler.(Bep6Handler); ok {
 			err = h.HaveNone(pc)
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}
 	case Reject:
-		if !pc.IsSupportFast() {
-			return ErrNotSupportFast
+		if !pc.ExtBits.IsSupportFast() {
+			err = ErrNotSupportFast
 		} else if h, ok := handler.(Bep6Handler); ok {
 			err = h.Reject(pc, msg.Index, msg.Begin, msg.Length)
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}
 	case AllowedFast:
-		if !pc.IsSupportFast() {
-			return ErrNotSupportFast
+		if !pc.ExtBits.IsSupportFast() {
+			err = ErrNotSupportFast
 		} else if h, ok := handler.(Bep6Handler); ok {
 			err = h.AllowedFast(pc, msg.Index)
 		} else {
@@ -492,8 +529,8 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 
 	// BEP 10 - Extension Protocol
 	case Extended:
-		if !pc.IsSupportExtended() {
-			return ErrNotSupportExtended
+		if !pc.ExtBits.IsSupportExtended() {
+			err = ErrNotSupportExtended
 		} else if h, ok := handler.(Bep10Handler); ok {
 			err = pc.handleExtMsg(h, msg)
 		} else {
@@ -503,6 +540,10 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 	// Other
 	default:
 		err = handler.OnMessage(pc, msg)
+	}
+
+	if !pc.notFirstMsg {
+		pc.notFirstMsg = true
 	}
 
 	return

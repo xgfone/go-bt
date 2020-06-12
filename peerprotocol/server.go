@@ -28,7 +28,7 @@ import (
 // Handler is used to handle the incoming peer connection.
 type Handler interface {
 	// OnHandShake is used to check whether the handshake extension is acceptable.
-	OnHandShake(conn *PeerConn, hmsg HandshakeMsg) error
+	OnHandShake(conn *PeerConn) error
 
 	// OnMessage is used to handle the incoming peer message.
 	//
@@ -47,7 +47,7 @@ type Config struct {
 
 	// MaxLength is used to limit the maximum number of the message body.
 	//
-	// The default is 0, which represents no limit.
+	// 0 represents no limit, and the default is 262144, that's, 256KB.
 	MaxLength uint32
 
 	// Timeout is used to control the timeout of the read/write the message.
@@ -70,6 +70,9 @@ func (c *Config) set(conf ...Config) {
 		*c = conf[0]
 	}
 
+	if c.MaxLength == 0 {
+		c.MaxLength = 262144 // 256KB
+	}
 	if c.ErrorLog == nil {
 		c.ErrorLog = log.Printf
 	}
@@ -122,13 +125,13 @@ func (s *Server) Run() {
 
 func (s *Server) handleConn(conn net.Conn) {
 	pc := &PeerConn{
-		ID:            s.id,
-		Conn:          conn,
-		ExtensionBits: s.c.ExtBits,
-		Timeout:       s.c.Timeout,
-		MaxLength:     s.c.MaxLength,
-		Choked:        true,
-		PeerChoked:    true,
+		ID:         s.id,
+		Conn:       conn,
+		ExtBits:    s.c.ExtBits,
+		Timeout:    s.c.Timeout,
+		MaxLength:  s.c.MaxLength,
+		Choked:     true,
+		PeerChoked: true,
 	}
 
 	if err := s.handlePeerMessage(pc); err != nil {
@@ -138,10 +141,9 @@ func (s *Server) handleConn(conn net.Conn) {
 
 func (s *Server) handlePeerMessage(pc *PeerConn) (err error) {
 	defer pc.Close()
-	m, err := pc.Handshake(metainfo.Hash{})
-	if err != nil {
+	if err = pc.Handshake(); err != nil {
 		return fmt.Errorf("fail to handshake with '%s': %s", pc.RemoteAddr().String(), err)
-	} else if err = s.h.OnHandShake(pc, m); err != nil {
+	} else if err = s.h.OnHandShake(pc); err != nil {
 		return fmt.Errorf("handshake error with '%s': %s", pc.RemoteAddr().String(), err)
 	}
 
