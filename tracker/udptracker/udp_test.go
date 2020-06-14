@@ -119,7 +119,7 @@ func ExampleClient() {
 		fmt.Printf("%d.Completed: %d\n", i, r.Completed)
 	}
 
-	// Output:
+	// Unordered output:
 	// Extensions[0]: URLData(data)
 	// Extensions[1]: Nop
 	// Interval: 1

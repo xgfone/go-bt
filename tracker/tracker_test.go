@@ -120,7 +120,7 @@ func ExampleClient() {
 		fmt.Printf("%s.Completed: %d\n", i.HexString(), r.Completed)
 	}
 
-	// Output:
+	// Unordered output:
 	// Extensions[0]: URLData(/path?a=1&b=2)
 	// Interval: 1
 	// Leechers: 2
