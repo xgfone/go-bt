@@ -2,6 +2,7 @@
 
 A pure golang implementation of [BitTorrent](http://bittorrent.org/beps/bep_0000.html) library, which is inspired by [dht](https://github.com/shiyanhui/dht) and [torrent](https://github.com/anacrolix/torrent).
 
+***WORK IN PROGRESS***
 
 ## Features
 
@@ -14,7 +15,7 @@ A pure golang implementation of [BitTorrent](http://bittorrent.org/beps/bep_0000
 
 ## Install
 ```shell
-$ go get github.com/xgfone/bt
+$ go get -u github.com/xgfone/bt
 ```
 
 
