@@ -24,6 +24,51 @@ import (
 
 var errMessageTooLong = fmt.Errorf("the peer message is too long")
 
+// BitField represents the bit field of the pieces.
+type BitField []uint8
+
+// NewBitField returns a new BitField to hold the pieceNum pieces.
+func NewBitField(pieceNum int) BitField {
+	return make(BitField, (pieceNum+7)/8)
+}
+
+// NewBitFieldFromBools returns a new BitField from the bool list.
+func NewBitFieldFromBools(bs []bool) BitField {
+	bf := NewBitField(len(bs))
+	for i, has := range bs {
+		if has {
+			bf.Set(uint32(i))
+		}
+	}
+	return bf
+}
+
+// Bools converts the bit field to []bool.
+func (bf BitField) Bools() []bool {
+	bs := make([]bool, 0, len(bf)*8)
+	for _, b := range bf {
+		for i := 7; i >= 0; i-- {
+			bs = append(bs, (b>>byte(i))&1 == 1)
+		}
+	}
+	return bs
+}
+
+// Set sets the bit of the piece to 1 by its index.
+func (bf BitField) Set(index uint32) {
+	bf[index/8] |= (1 << byte(7-index%8))
+}
+
+// Unset sets the bit of the piece to 0 by its index.
+func (bf BitField) Unset(index uint32) {
+	bf[index/8] &^= (1 << byte(7-index%8))
+}
+
+// IsSet reports whether the bit of the piece is set to 1.
+func (bf BitField) IsSet(index uint32) bool {
+	return bf[index/8]&(1<<byte(7-index%8)) != 0
+}
+
 // Message is the message used by the peer protocol, which contains
 // all the fields specified by the standard message types.
 type Message struct {
@@ -56,10 +101,10 @@ type Message struct {
 	//   BEP 3: Piece
 	Piece []byte
 
-	// Bitfield is used by these message types:
+	// BitField is used by these message types:
 	//
 	//   BEP 3: Bitfield
-	Bitfield []bool
+	BitField BitField
 
 	// ExtendedID and ExtendedPayload are used by these message types:
 	//
@@ -162,12 +207,7 @@ func (m *Message) Decode(r io.Reader, maxLength uint32) (err error) {
 		_len := length - 1
 		bs := make([]byte, _len)
 		if _, err = io.ReadFull(lr, bs); err == nil {
-			m.Bitfield = make([]bool, 0, _len*8)
-			for _, b := range bs {
-				for i := 7; i >= 0; i-- {
-					m.Bitfield = append(m.Bitfield, (b>>byte(i))&1 == 1)
-				}
-			}
+			m.BitField = BitField(bs)
 		}
 	case Piece:
 		if err = binary.Read(lr, binary.BigEndian, &m.Index); err != nil {
@@ -246,14 +286,7 @@ func (m Message) marshalBinaryType(buf *bytes.Buffer) (err error) {
 			return
 		}
 	case Bitfield:
-		_len := (len(m.Bitfield) + 7) / 8
-		bs := make([]byte, _len)
-		for i, has := range m.Bitfield {
-			if has {
-				bs[i/8] |= (1 << byte(7-i%8))
-			}
-		}
-		buf.Write(bs)
+		buf.Write(m.BitField)
 	case Piece:
 		if err = binary.Write(buf, binary.BigEndian, m.Index); err != nil {
 			return

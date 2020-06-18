@@ -41,7 +41,7 @@ type Bep3Handler interface {
 	Interested(pc *PeerConn) error
 	NotInterested(pc *PeerConn) error
 	Have(pc *PeerConn, index uint32) error
-	Bitfield(pc *PeerConn, bits []bool) error
+	BitField(pc *PeerConn, bits BitField) error
 	Request(pc *PeerConn, index uint32, begin uint32, length uint32) error
 	Piece(pc *PeerConn, index uint32, begin uint32, piece []byte) error
 	Cancel(pc *PeerConn, index uint32, begin uint32, length uint32) error
@@ -316,8 +316,8 @@ func (pc *PeerConn) SendNotInterested() error {
 // SendBitfield sends a Bitfield message to the peer.
 //
 // BEP 3
-func (pc *PeerConn) SendBitfield(bits []bool) error {
-	return pc.WriteMsg(Message{Type: Bitfield, Bitfield: bits})
+func (pc *PeerConn) SendBitfield(bits BitField) error {
+	return pc.WriteMsg(Message{Type: Bitfield, BitField: bits})
 }
 
 // SendHave sends a Have message to the peer.
@@ -458,7 +458,7 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 		if pc.notFirstMsg {
 			err = ErrNotFirstMsg
 		} else if h, ok := handler.(Bep3Handler); ok {
-			err = h.Bitfield(pc, msg.Bitfield)
+			err = h.BitField(pc, msg.BitField)
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}

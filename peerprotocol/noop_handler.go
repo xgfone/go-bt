@@ -48,8 +48,8 @@ func (NoopBep3Handler) Request(*PeerConn, uint32, uint32, uint32) error { return
 // Have implements the interface Bep3Handler#Have.
 func (NoopBep3Handler) Have(*PeerConn, uint32) error { return nil }
 
-// Bitfield implements the interface Bep3Handler#Bitfield.
-func (NoopBep3Handler) Bitfield(*PeerConn, []bool) error { return nil }
+// BitField implements the interface Bep3Handler#Bitfield.
+func (NoopBep3Handler) BitField(*PeerConn, BitField) error { return nil }
 
 // Piece implements the interface Bep3Handler#Piece.
 func (NoopBep3Handler) Piece(*PeerConn, uint32, uint32, []byte) error { return nil }
