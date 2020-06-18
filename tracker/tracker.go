@@ -194,16 +194,30 @@ type Client interface {
 	Close() error
 }
 
+// ClientConfig is used to configure the defalut client implementation.
+type ClientConfig struct {
+	ID metainfo.Hash // The ID of the local client peer.
+}
+
 // NewClient returns a new Client.
-func NewClient(connURL string) (c Client, err error) {
+func NewClient(connURL string, conf ...ClientConfig) (c Client, err error) {
+	var id metainfo.Hash
+	if len(conf) > 0 {
+		id = conf[0].ID
+	}
+
 	u, err := url.Parse(connURL)
 	if err == nil {
 		switch u.Scheme {
 		case "http", "https":
 			c = &tclient{url: connURL, http: httptracker.NewClient(connURL, "")}
+			if !id.IsZero() {
+				c.(*tclient).http.ID = id
+			}
 		case "udp", "udp4", "udp6":
 			var utc *udptracker.Client
-			utc, err = udptracker.NewClientByDial(u.Scheme, u.Host)
+			config := udptracker.ClientConfig{ID: id}
+			utc, err = udptracker.NewClientByDial(u.Scheme, u.Host, config)
 			if err == nil {
 				var e []udptracker.Extension
 				if p := u.RequestURI(); p != "" {

@@ -267,6 +267,7 @@ func (sr ScrapeResponse) EncodeTo(w io.Writer) (err error) {
 
 // Client represents a tracker client based on HTTP/HTTPS.
 type Client struct {
+	ID          metainfo.Hash
 	AnnounceURL string
 	ScrapeURL   string
 }
@@ -279,7 +280,8 @@ func NewClient(announceURL, scrapeURL string) *Client {
 	if scrapeURL == "" {
 		scrapeURL = strings.Replace(announceURL, "announce", "scrape", -1)
 	}
-	return &Client{AnnounceURL: announceURL, ScrapeURL: scrapeURL}
+	id := metainfo.NewRandomHash()
+	return &Client{AnnounceURL: announceURL, ScrapeURL: scrapeURL, ID: id}
 }
 
 // Close closes the client, which does nothing at present.
@@ -303,6 +305,14 @@ func (t *Client) send(c context.Context, u string, vs url.Values, r interface{})
 // Announce sends a Announce request to the tracker.
 func (t *Client) Announce(c context.Context, req AnnounceRequest) (
 	resp AnnounceResponse, err error) {
+	if req.PeerID.IsZero() {
+		if t.ID.IsZero() {
+			req.PeerID = metainfo.NewRandomHash()
+		} else {
+			req.PeerID = t.ID
+		}
+	}
+
 	err = t.send(c, t.AnnounceURL, req.ToQuery(), &resp)
 	return
 }

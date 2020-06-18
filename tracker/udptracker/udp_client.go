@@ -48,6 +48,7 @@ func NewClient(conn *net.UDPConn, c ...ClientConfig) *Client {
 
 // ClientConfig is used to configure the Client.
 type ClientConfig struct {
+	ID         metainfo.Hash
 	MaxBufSize int // Default: 2048
 }
 
@@ -56,6 +57,9 @@ func (c *ClientConfig) set(conf ...ClientConfig) {
 		*c = conf[0]
 	}
 
+	if c.ID.IsZero() {
+		c.ID = metainfo.NewRandomHash()
+	}
 	if c.MaxBufSize <= 0 {
 		c.MaxBufSize = 2048
 	}
@@ -229,6 +233,9 @@ func (utc *Client) announce(ctx context.Context, req AnnounceRequest) (
 //   2. If returning an error, you should retry it.
 //      See http://www.bittorrent.org/beps/bep_0015.html#time-outs
 func (utc *Client) Announce(c context.Context, r AnnounceRequest) (AnnounceResponse, error) {
+	if r.PeerID.IsZero() {
+		r.PeerID = utc.conf.ID
+	}
 	return utc.announce(c, r)
 }
 
