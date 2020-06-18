@@ -131,6 +131,12 @@ type PeerConn struct {
 	// Data is used to store the context data associated with the connection.
 	Data interface{}
 
+	// OnWriteMsg is called when sending a message to the remote peer.
+	// You can use it to queue the sent messages.
+	//
+	// Optional.
+	OnWriteMsg func(pc *PeerConn, m Message) error
+
 	notFirstMsg bool
 }
 
@@ -150,8 +156,8 @@ func NewPeerConn(conn net.Conn, id, infohash metainfo.Hash) *PeerConn {
 }
 
 // NewPeerConnByDial returns a new PeerConn by dialing to addr with the "tcp" network.
-func NewPeerConnByDial(addr string, id, infohash metainfo.Hash) (pc *PeerConn, err error) {
-	conn, err := net.Dial("tcp", addr)
+func NewPeerConnByDial(addr string, id, infohash metainfo.Hash, timeout time.Duration) (pc *PeerConn, err error) {
+	conn, err := net.DialTimeout("tcp", addr, timeout)
 	if err == nil {
 		pc = NewPeerConn(conn, id, infohash)
 	}
@@ -256,6 +262,10 @@ func (pc *PeerConn) ReadMsg() (m Message, err error) {
 //
 // BEP 3
 func (pc *PeerConn) WriteMsg(m Message) (err error) {
+	if pc.OnWriteMsg != nil {
+		return pc.OnWriteMsg(pc, m)
+	}
+
 	buf := bytes.NewBuffer(make([]byte, 0, 128))
 	if err = m.Encode(buf); err == nil {
 		pc.setWriteTimeout()
