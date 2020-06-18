@@ -32,6 +32,16 @@ func NewBitField(pieceNum int) BitField {
 	return make(BitField, (pieceNum+7)/8)
 }
 
+// NewBitFieldTrue is the same as NewBitField, but set all bits to 1.
+func NewBitFieldTrue(pieceNum int) BitField {
+	_len := (pieceNum + 7) / 8
+	bf := make(BitField, _len)
+	for i := 0; i < _len; i++ {
+		bf[i] = 0xff
+	}
+	return bf
+}
+
 // NewBitFieldFromBools returns a new BitField from the bool list.
 func NewBitFieldFromBools(bs []bool) BitField {
 	bf := NewBitField(len(bs))
@@ -41,6 +51,10 @@ func NewBitFieldFromBools(bs []bool) BitField {
 		}
 	}
 	return bf
+}
+
+func (bf BitField) String() string {
+	return fmt.Sprintf("%b", bf)
 }
 
 // Bools converts the bit field to []bool.

@@ -50,4 +50,10 @@ func TestBitField(t *testing.T) {
 	} else if bs[10] {
 		t.Error(10)
 	}
+
+	bf = NewBitFieldTrue(16)
+	if !bf.IsSet(0) || !bf.IsSet(1) || !bf.IsSet(2) || !bf.IsSet(3) ||
+		!bf.IsSet(4) || !bf.IsSet(5) || !bf.IsSet(6) || !bf.IsSet(7) {
+		t.Error(bf)
+	}
 }
