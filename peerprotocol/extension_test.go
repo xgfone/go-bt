@@ -42,7 +42,7 @@ func TestUtMetadataExtendedMsg(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg := Message{Type: Extended, ExtendedPayload: buf.Bytes()}
+	msg := Message{Type: MTypeExtended, ExtendedPayload: buf.Bytes()}
 	m2, err := msg.UtMetadataExtendedMsg()
 	if err != nil {
 		t.Fatal(err)

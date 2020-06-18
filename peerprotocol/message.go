@@ -133,7 +133,7 @@ func DecodeToMessage(r io.Reader, maxLength uint32) (msg Message, err error) {
 //
 // Notice: the message type must be Extended.
 func (m Message) UtMetadataExtendedMsg() (um UtMetadataExtendedMsg, err error) {
-	if m.Type != Extended {
+	if m.Type != MTypeExtended {
 		panic("the message type is Extended")
 	}
 	err = um.DecodeFromPayload(m.ExtendedPayload)
@@ -190,10 +190,11 @@ func (m *Message) Decode(r io.Reader, maxLength uint32) (err error) {
 	}
 
 	switch m.Type = MessageType(_type); m.Type {
-	case Choke, Unchoke, Interested, NotInterested, HaveAll, HaveNone:
-	case Have, AllowedFast, Suggest:
+	case MTypeChoke, MTypeUnchoke, MTypeInterested, MTypeNotInterested,
+		MTypeHaveAll, MTypeHaveNone:
+	case MTypeHave, MTypeAllowedFast, MTypeSuggest:
 		err = binary.Read(lr, binary.BigEndian, &m.Index)
-	case Request, Cancel, Reject:
+	case MTypeRequest, MTypeCancel, MTypeReject:
 		if err = binary.Read(lr, binary.BigEndian, &m.Index); err != nil {
 			return
 		}
@@ -203,13 +204,13 @@ func (m *Message) Decode(r io.Reader, maxLength uint32) (err error) {
 		if err = binary.Read(lr, binary.BigEndian, &m.Length); err != nil {
 			return
 		}
-	case Bitfield:
+	case MTypeBitField:
 		_len := length - 1
 		bs := make([]byte, _len)
 		if _, err = io.ReadFull(lr, bs); err == nil {
 			m.BitField = BitField(bs)
 		}
-	case Piece:
+	case MTypePiece:
 		if err = binary.Read(lr, binary.BigEndian, &m.Index); err != nil {
 			return
 		}
@@ -222,11 +223,11 @@ func (m *Message) Decode(r io.Reader, maxLength uint32) (err error) {
 		if _, err = io.ReadFull(lr, m.Piece); err != nil {
 			return fmt.Errorf("reading piece data error: %s", err)
 		}
-	case Extended:
+	case MTypeExtended:
 		if m.ExtendedID, err = readByte(lr); err == nil {
 			m.ExtendedPayload, err = ioutil.ReadAll(lr)
 		}
-	case Port:
+	case MTypePort:
 		err = binary.Read(lr, binary.BigEndian, &m.Port)
 	default:
 		// err = fmt.Errorf("unknown message type %v", m.Type)
@@ -272,10 +273,11 @@ func (m Message) Encode(buf *bytes.Buffer) (err error) {
 
 func (m Message) marshalBinaryType(buf *bytes.Buffer) (err error) {
 	switch m.Type {
-	case Choke, Unchoke, Interested, NotInterested, HaveAll, HaveNone:
-	case Have:
+	case MTypeChoke, MTypeUnchoke, MTypeInterested, MTypeNotInterested,
+		MTypeHaveAll, MTypeHaveNone:
+	case MTypeHave:
 		err = binary.Write(buf, binary.BigEndian, m.Index)
-	case Request, Cancel, Reject:
+	case MTypeRequest, MTypeCancel, MTypeReject:
 		if err = binary.Write(buf, binary.BigEndian, m.Index); err != nil {
 			return
 		}
@@ -285,9 +287,9 @@ func (m Message) marshalBinaryType(buf *bytes.Buffer) (err error) {
 		if err = binary.Write(buf, binary.BigEndian, m.Length); err != nil {
 			return
 		}
-	case Bitfield:
+	case MTypeBitField:
 		buf.Write(m.BitField)
-	case Piece:
+	case MTypePiece:
 		if err = binary.Write(buf, binary.BigEndian, m.Index); err != nil {
 			return
 		}
@@ -295,11 +297,11 @@ func (m Message) marshalBinaryType(buf *bytes.Buffer) (err error) {
 			return
 		}
 		_, err = buf.Write(m.Piece)
-	case Extended:
+	case MTypeExtended:
 		if err = buf.WriteByte(byte(m.ExtendedID)); err != nil {
 			_, err = buf.Write(m.ExtendedPayload)
 		}
-	case Port:
+	case MTypePort:
 		err = binary.Write(buf, binary.BigEndian, m.Port)
 	default:
 		// err = fmt.Errorf("unknown message type: %v", m.Type)

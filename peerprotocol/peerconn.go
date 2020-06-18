@@ -289,105 +289,125 @@ func (pc *PeerConn) SendKeepalive() error {
 //
 // BEP 3
 func (pc *PeerConn) SendChoke() error {
-	return pc.WriteMsg(Message{Type: Choke})
+	return pc.WriteMsg(Message{Type: MTypeChoke})
 }
 
 // SendUnchoke sends a Unchoke message to the peer.
 //
 // BEP 3
 func (pc *PeerConn) SendUnchoke() error {
-	return pc.WriteMsg(Message{Type: Unchoke})
+	return pc.WriteMsg(Message{Type: MTypeUnchoke})
 }
 
 // SendInterested sends a Interested message to the peer.
 //
 // BEP 3
 func (pc *PeerConn) SendInterested() error {
-	return pc.WriteMsg(Message{Type: Interested})
+	return pc.WriteMsg(Message{Type: MTypeInterested})
 }
 
 // SendNotInterested sends a NotInterested message to the peer.
 //
 // BEP 3
 func (pc *PeerConn) SendNotInterested() error {
-	return pc.WriteMsg(Message{Type: NotInterested})
+	return pc.WriteMsg(Message{Type: MTypeNotInterested})
 }
 
 // SendBitfield sends a Bitfield message to the peer.
 //
 // BEP 3
 func (pc *PeerConn) SendBitfield(bits BitField) error {
-	return pc.WriteMsg(Message{Type: Bitfield, BitField: bits})
+	return pc.WriteMsg(Message{Type: MTypeBitField, BitField: bits})
 }
 
 // SendHave sends a Have message to the peer.
 //
 // BEP 3
 func (pc *PeerConn) SendHave(index uint32) error {
-	return pc.WriteMsg(Message{Type: Have, Index: index})
+	return pc.WriteMsg(Message{Type: MTypeHave, Index: index})
 }
 
 // SendRequest sends a Request message to the peer.
 //
 // BEP 3
 func (pc *PeerConn) SendRequest(index, begin, length uint32) error {
-	return pc.WriteMsg(Message{Type: Request, Index: index, Begin: begin, Length: length})
+	return pc.WriteMsg(Message{
+		Type:   MTypeRequest,
+		Index:  index,
+		Begin:  begin,
+		Length: length,
+	})
 }
 
 // SendCancel sends a Cancel message to the peer.
 //
 // BEP 3
 func (pc *PeerConn) SendCancel(index, begin, length uint32) error {
-	return pc.WriteMsg(Message{Type: Cancel, Index: index, Begin: begin, Length: length})
+	return pc.WriteMsg(Message{
+		Type:   MTypeCancel,
+		Index:  index,
+		Begin:  begin,
+		Length: length,
+	})
 }
 
 // SendPiece sends a Piece message to the peer.
 //
 // BEP 3
 func (pc *PeerConn) SendPiece(index, begin uint32, piece []byte) error {
-	return pc.WriteMsg(Message{Type: Piece, Index: index, Begin: begin, Piece: piece})
+	return pc.WriteMsg(Message{
+		Type:  MTypePiece,
+		Index: index,
+		Begin: begin,
+		Piece: piece,
+	})
 }
 
 // SendPort sends a Port message to the peer.
 //
 // BEP 5
 func (pc *PeerConn) SendPort(port uint16) error {
-	return pc.WriteMsg(Message{Type: Port, Port: port})
+	return pc.WriteMsg(Message{Type: MTypePort, Port: port})
 }
 
 // SendHaveAll sends a HaveAll message to the peer.
 //
 // BEP 6
 func (pc *PeerConn) SendHaveAll() error {
-	return pc.WriteMsg(Message{Type: HaveAll})
+	return pc.WriteMsg(Message{Type: MTypeHaveAll})
 }
 
 // SendHaveNone sends a HaveNone message to the peer.
 //
 // BEP 6
 func (pc *PeerConn) SendHaveNone() error {
-	return pc.WriteMsg(Message{Type: HaveNone})
+	return pc.WriteMsg(Message{Type: MTypeHaveNone})
 }
 
 // SendSuggest sends a Suggest message to the peer.
 //
 // BEP 6
 func (pc *PeerConn) SendSuggest(index uint32) error {
-	return pc.WriteMsg(Message{Type: Suggest, Index: index})
+	return pc.WriteMsg(Message{Type: MTypeSuggest, Index: index})
 }
 
 // SendReject sends a Reject message to the peer.
 //
 // BEP 6
 func (pc *PeerConn) SendReject(index, begin, length uint32) error {
-	return pc.WriteMsg(Message{Type: Reject, Index: index, Begin: begin, Length: length})
+	return pc.WriteMsg(Message{
+		Type:   MTypeReject,
+		Index:  index,
+		Begin:  begin,
+		Length: length,
+	})
 }
 
 // SendAllowedFast sends a AllowedFast message to the peer.
 //
 // BEP 6
 func (pc *PeerConn) SendAllowedFast(index uint32) error {
-	return pc.WriteMsg(Message{Type: AllowedFast, Index: index})
+	return pc.WriteMsg(Message{Type: MTypeAllowedFast, Index: index})
 }
 
 // SendExtHandshakeMsg sends the Extended Handshake message to the peer.
@@ -405,7 +425,11 @@ func (pc *PeerConn) SendExtHandshakeMsg(m ExtendedHandshakeMsg) (err error) {
 //
 // BEP 10
 func (pc *PeerConn) SendExtMsg(extID uint8, payload []byte) error {
-	return pc.WriteMsg(Message{Type: Extended, ExtendedID: extID, ExtendedPayload: payload})
+	return pc.WriteMsg(Message{
+		Type:            MTypeExtended,
+		ExtendedID:      extID,
+		ExtendedPayload: payload,
+	})
 }
 
 // HandleMessage calls the method of the handler to handle the message.
@@ -420,41 +444,41 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 
 	switch msg.Type {
 	// BEP 3 - The BitTorrent Protocol Specification
-	case Choke:
+	case MTypeChoke:
 		pc.PeerChoked = true
 		if h, ok := handler.(Bep3Handler); ok {
 			err = h.Choke(pc)
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}
-	case Unchoke:
+	case MTypeUnchoke:
 		pc.PeerChoked = false
 		if h, ok := handler.(Bep3Handler); ok {
 			err = h.Unchoke(pc)
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}
-	case Interested:
+	case MTypeInterested:
 		pc.PeerInterested = true
 		if h, ok := handler.(Bep3Handler); ok {
 			err = h.Interested(pc)
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}
-	case NotInterested:
+	case MTypeNotInterested:
 		pc.PeerInterested = false
 		if h, ok := handler.(Bep3Handler); ok {
 			err = h.NotInterested(pc)
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}
-	case Have:
+	case MTypeHave:
 		if h, ok := handler.(Bep3Handler); ok {
 			err = h.Have(pc, msg.Index)
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}
-	case Bitfield:
+	case MTypeBitField:
 		if pc.notFirstMsg {
 			err = ErrNotFirstMsg
 		} else if h, ok := handler.(Bep3Handler); ok {
@@ -462,19 +486,19 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}
-	case Request:
+	case MTypeRequest:
 		if h, ok := handler.(Bep3Handler); ok {
 			err = h.Request(pc, msg.Index, msg.Begin, msg.Length)
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}
-	case Piece:
+	case MTypePiece:
 		if h, ok := handler.(Bep3Handler); ok {
 			err = h.Piece(pc, msg.Index, msg.Begin, msg.Piece)
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}
-	case Cancel:
+	case MTypeCancel:
 		if h, ok := handler.(Bep3Handler); ok {
 			err = h.Cancel(pc, msg.Index, msg.Begin, msg.Length)
 		} else {
@@ -482,7 +506,7 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 		}
 
 	// BEP 5 - DHT Protocol
-	case Port:
+	case MTypePort:
 		if !pc.ExtBits.IsSupportDHT() {
 			err = ErrNotSupportDHT
 		} else if h, ok := handler.(Bep5Handler); ok {
@@ -492,7 +516,7 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 		}
 
 	// BEP 6 - Fast Extension
-	case Suggest:
+	case MTypeSuggest:
 		if !pc.ExtBits.IsSupportFast() {
 			err = ErrNotSupportFast
 		} else if h, ok := handler.(Bep6Handler); ok {
@@ -500,7 +524,7 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}
-	case HaveAll:
+	case MTypeHaveAll:
 		if pc.notFirstMsg {
 			err = ErrNotFirstMsg
 		} else if !pc.ExtBits.IsSupportFast() {
@@ -510,7 +534,7 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}
-	case HaveNone:
+	case MTypeHaveNone:
 		if pc.notFirstMsg {
 			err = ErrNotFirstMsg
 		} else if !pc.ExtBits.IsSupportFast() {
@@ -520,7 +544,7 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}
-	case Reject:
+	case MTypeReject:
 		if !pc.ExtBits.IsSupportFast() {
 			err = ErrNotSupportFast
 		} else if h, ok := handler.(Bep6Handler); ok {
@@ -528,7 +552,7 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 		} else {
 			err = handler.OnMessage(pc, msg)
 		}
-	case AllowedFast:
+	case MTypeAllowedFast:
 		if !pc.ExtBits.IsSupportFast() {
 			err = ErrNotSupportFast
 		} else if h, ok := handler.(Bep6Handler); ok {
@@ -538,7 +562,7 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 		}
 
 	// BEP 10 - Extension Protocol
-	case Extended:
+	case MTypeExtended:
 		if !pc.ExtBits.IsSupportExtended() {
 			err = ErrNotSupportExtended
 		} else if h, ok := handler.(Bep10Handler); ok {

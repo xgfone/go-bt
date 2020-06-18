@@ -26,28 +26,28 @@ const ProtocolHeader = "\x13BitTorrent protocol"
 // Predefine some message types.
 const (
 	// BEP 3
-	Choke         MessageType = 0
-	Unchoke       MessageType = 1
-	Interested    MessageType = 2
-	NotInterested MessageType = 3
-	Have          MessageType = 4
-	Bitfield      MessageType = 5
-	Request       MessageType = 6
-	Piece         MessageType = 7
-	Cancel        MessageType = 8
+	MTypeChoke         MessageType = 0
+	MTypeUnchoke       MessageType = 1
+	MTypeInterested    MessageType = 2
+	MTypeNotInterested MessageType = 3
+	MTypeHave          MessageType = 4
+	MTypeBitField      MessageType = 5
+	MTypeRequest       MessageType = 6
+	MTypePiece         MessageType = 7
+	MTypeCancel        MessageType = 8
 
 	// BEP 5
-	Port MessageType = 9
+	MTypePort MessageType = 9
 
 	// BEP 6 - Fast extension
-	Suggest     MessageType = 0x0d // 13
-	HaveAll     MessageType = 0x0e // 14
-	HaveNone    MessageType = 0x0f // 15
-	Reject      MessageType = 0x10 // 16
-	AllowedFast MessageType = 0x11 // 17
+	MTypeSuggest     MessageType = 0x0d // 13
+	MTypeHaveAll     MessageType = 0x0e // 14
+	MTypeHaveNone    MessageType = 0x0f // 15
+	MTypeReject      MessageType = 0x10 // 16
+	MTypeAllowedFast MessageType = 0x11 // 17
 
 	// BEP 10
-	Extended MessageType = 20
+	MTypeExtended MessageType = 20
 )
 
 // MessageType is used to represent the message type.
@@ -55,37 +55,37 @@ type MessageType byte
 
 func (mt MessageType) String() string {
 	switch mt {
-	case Choke:
+	case MTypeChoke:
 		return "Choke"
-	case Unchoke:
+	case MTypeUnchoke:
 		return "Unchoke"
-	case Interested:
+	case MTypeInterested:
 		return "Interested"
-	case NotInterested:
+	case MTypeNotInterested:
 		return "NotInterested"
-	case Have:
+	case MTypeHave:
 		return "Have"
-	case Bitfield:
+	case MTypeBitField:
 		return "Bitfield"
-	case Request:
+	case MTypeRequest:
 		return "Request"
-	case Piece:
+	case MTypePiece:
 		return "Piece"
-	case Cancel:
+	case MTypeCancel:
 		return "Cancel"
-	case Port:
+	case MTypePort:
 		return "Port"
-	case Suggest:
+	case MTypeSuggest:
 		return "Suggest"
-	case HaveAll:
+	case MTypeHaveAll:
 		return "HaveAll"
-	case HaveNone:
+	case MTypeHaveNone:
 		return "HaveNone"
-	case Reject:
+	case MTypeReject:
 		return "Reject"
-	case AllowedFast:
+	case MTypeAllowedFast:
 		return "AllowedFast"
-	case Extended:
+	case MTypeExtended:
 		return "Extended"
 	}
 	return fmt.Sprintf("MessageType(%d)", mt)
@@ -93,5 +93,5 @@ func (mt MessageType) String() string {
 
 // FastExtension reports whether the message type is fast extension.
 func (mt MessageType) FastExtension() bool {
-	return mt >= Suggest && mt <= AllowedFast
+	return mt >= MTypeSuggest && mt <= MTypeAllowedFast
 }
