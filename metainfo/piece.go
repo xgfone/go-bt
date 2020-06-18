@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 
 	"github.com/xgfone/bt/utils"
 )
@@ -27,6 +28,14 @@ import (
 type Piece struct {
 	info  Info
 	index int
+}
+
+// Piece returns the Piece by the index starting with 0.
+func (info Info) Piece(index int) Piece {
+	if n := len(info.Pieces); index >= n {
+		panic(fmt.Errorf("Info.Piece: index '%d' exceeds maximum '%d'", index, n))
+	}
+	return Piece{info: info, index: index}
 }
 
 // Index returns the index of the current piece.
@@ -96,4 +105,144 @@ func GeneratePiecesFromFiles(files []File, pieceLength int64,
 
 	go func() { pw.CloseWithError(writeFiles(pw, files, open)) }()
 	return GeneratePieces(pr, pieceLength)
+}
+
+// PieceBlock represents a block in a piece.
+type PieceBlock struct {
+	Index  uint32 // The index of the piece.
+	Offset uint32 // The offset from the beginning of the piece.
+	Length uint32 // The length of the block, which is equal to 2^14 in general.
+}
+
+// PieceBlocks is a set of PieceBlocks.
+type PieceBlocks []PieceBlock
+
+func (pbs PieceBlocks) Len() int      { return len(pbs) }
+func (pbs PieceBlocks) Swap(i, j int) { pbs[i], pbs[j] = pbs[j], pbs[i] }
+func (pbs PieceBlocks) Less(i, j int) bool {
+	if pbs[i].Index < pbs[j].Index {
+		return true
+	} else if pbs[i].Index == pbs[j].Index && pbs[i].Offset < pbs[j].Offset {
+		return true
+	}
+	return false
+}
+
+// FilePiece represents the piece range used by a file, which is used to
+// calculate the downloaded piece when downloading the file.
+type FilePiece struct {
+	// The index of the current piece.
+	Index uint32
+
+	// The offset bytes from the beginning of the current piece,
+	// which is equal to 0 in general.
+	Offset uint32
+
+	// The length of the data, which is equal to PieceLength in Info in general.
+	// For most implementations, PieceLength is equal to 2^18.
+	// So, a piece can contain sixteen blocks.
+	Length uint32
+}
+
+// TotalOffset return the total offset from the beginning of all the files.
+func (fp FilePiece) TotalOffset(pieceLength int64) int64 {
+	return int64(fp.Index)*pieceLength + int64(fp.Offset)
+}
+
+// Blocks returns the lists of the blocks of the piece.
+func (fp FilePiece) Blocks() PieceBlocks {
+	bs := make(PieceBlocks, 0, 16)
+	for offset, rest := fp.Offset, fp.Length; rest > 0; {
+		length := uint32(16384)
+		if rest < length {
+			length = rest
+		}
+
+		bs = append(bs, PieceBlock{Index: fp.Index, Offset: offset, Length: length})
+		offset += length
+		rest -= length
+	}
+	return bs
+}
+
+// FilePieces is a set of FilePieces.
+type FilePieces []FilePiece
+
+func (fps FilePieces) Len() int      { return len(fps) }
+func (fps FilePieces) Swap(i, j int) { fps[i], fps[j] = fps[j], fps[i] }
+func (fps FilePieces) Less(i, j int) bool {
+	if fps[i].Index < fps[j].Index {
+		return true
+	} else if fps[i].Index == fps[j].Index && fps[i].Offset < fps[j].Offset {
+		return true
+	}
+	return false
+}
+
+// Merge merges the contiguous pieces to the one piece.
+func (fps FilePieces) Merge() FilePieces {
+	_len := len(fps)
+	if _len < 2 {
+		return fps
+	}
+	sort.Sort(fps)
+	results := make(FilePieces, 0, _len)
+
+	lastpos := 0
+	curindex := fps[0].Index
+	for i, fp := range fps {
+		if fp.Index != curindex {
+			results = fps.merge(fps[lastpos:i], results)
+			lastpos = i
+			curindex = fp.Index
+		}
+	}
+
+	if lastpos < _len {
+		results = fps.merge(fps[lastpos:_len], results)
+	}
+
+	return results
+}
+
+func (fps FilePieces) merge(fpset, results FilePieces) FilePieces {
+	switch _len := len(fpset); _len {
+	case 0:
+	case 1:
+		results = append(results, fpset[0])
+	default:
+		index := fpset[0].Index
+		offset := fpset[0].Offset
+		length := fpset[0].Length
+
+		var last int
+		for i := 1; i < _len; i++ {
+			fp := fpset[i]
+
+			if offset+length == fp.Offset {
+				length += fp.Length
+				continue
+			}
+
+			last = i
+			results = append(results, FilePiece{
+				Index:  index,
+				Offset: offset,
+				Length: length,
+			})
+
+			offset = fp.Offset
+			length = fp.Length
+		}
+
+		if last < _len {
+			results = append(results, FilePiece{
+				Index:  index,
+				Offset: offset,
+				Length: length,
+			})
+		}
+	}
+
+	return results
 }

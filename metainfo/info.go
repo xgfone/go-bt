@@ -119,14 +119,6 @@ func (info Info) TotalLength() (ret int64) {
 	return
 }
 
-// Piece returns the Piece by the index starting with 0.
-func (info Info) Piece(index int) Piece {
-	if n := len(info.Pieces); index >= n {
-		panic(fmt.Errorf("Info.Piece: index '%d' exceeds maximum '%d'", index, n))
-	}
-	return Piece{info: info, index: index}
-}
-
 // PieceOffset returns the total offset of the piece.
 //
 // offset is the offset relative to the beginning of the piece.

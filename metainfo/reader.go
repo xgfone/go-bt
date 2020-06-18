@@ -20,23 +20,34 @@ import (
 )
 
 // Reader is used to read the data referred by the torrent file.
-type Reader struct {
-	Info  Info
-	Root  string
+type Reader interface {
+	io.Closer
+	io.ReaderAt
+
+	Info() Info
+	ReadBlock(pieceIndex, pieceOffset uint32, p []byte) (int, error)
+}
+
+// reader is used to read the data referred by the torrent file.
+type reader struct {
+	info  Info
+	root  string
 	files map[string]*os.File
 }
 
 // NewReader returns a new Reader.
-func NewReader(rootDir string, info Info) *Reader {
-	return &Reader{
-		Root:  rootDir,
-		Info:  info,
+func NewReader(rootDir string, info Info) Reader {
+	return &reader{
+		root:  rootDir,
+		info:  info,
 		files: make(map[string]*os.File, len(info.Files)),
 	}
 }
 
+func (r *reader) Info() Info { return r.info }
+
 // Close implements the interface io.Closer to closes the opened files.
-func (r *Reader) Close() error {
+func (r *reader) Close() error {
 	for name, file := range r.files {
 		if file != nil {
 			file.Close()
@@ -47,17 +58,17 @@ func (r *Reader) Close() error {
 }
 
 // ReadBlock reads a data block.
-func (r *Reader) ReadBlock(p []byte, pieceIndex, pieceOffset uint32) (int, error) {
-	return r.ReadAt(p, r.Info.PieceOffset(pieceIndex, pieceOffset))
+func (r *reader) ReadBlock(pieceIndex, pieceOffset uint32, p []byte) (int, error) {
+	return r.ReadAt(p, r.info.PieceOffset(pieceIndex, pieceOffset))
 }
 
 // ReadAt implements the interface io.ReaderAt.
-func (r *Reader) ReadAt(p []byte, offset int64) (n int, err error) {
+func (r *reader) ReadAt(p []byte, offset int64) (n int, err error) {
 	var m int
 	var f *os.File
 
 	for _len := len(p); n < _len; {
-		file, fileOffset := r.Info.GetFileByOffset(offset)
+		file, fileOffset := r.info.GetFileByOffset(offset)
 		if file.Length == 0 {
 			break
 		}
@@ -70,7 +81,7 @@ func (r *Reader) ReadAt(p []byte, offset int64) (n int, err error) {
 			break
 		}
 
-		filename := file.PathWithPrefix(r.Root, r.Info)
+		filename := file.PathWithPrefix(r.root, r.info)
 		if f, err = r.open(filename); err != nil {
 			break
 		}
@@ -86,9 +97,9 @@ func (r *Reader) ReadAt(p []byte, offset int64) (n int, err error) {
 	return
 }
 
-func (r *Reader) open(filename string) (f *os.File, err error) {
+func (r *reader) open(filename string) (f *os.File, err error) {
 	if r.files == nil {
-		r.files = make(map[string]*os.File, len(r.Info.Files))
+		r.files = make(map[string]*os.File, len(r.info.Files))
 	}
 
 	f, ok := r.files[filename]

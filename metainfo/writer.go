@@ -15,17 +15,26 @@
 package metainfo
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 )
 
+// Writer is used to write the data referred by the torrent file.
+type Writer interface {
+	io.Closer
+	io.WriterAt
+
+	Info() Info
+	WriteBlock(pieceIndex, pieceOffset uint32, p []byte) (int, error)
+}
+
 const wflag = os.O_WRONLY | os.O_CREATE
 
-// Writer is used to write the data referred by the torrent file.
-type Writer struct {
-	Info  Info
-	Root  string
-	Mode  os.FileMode
+type writer struct {
+	info  Info
+	root  string
+	mode  os.FileMode
 	files map[string]*os.File
 }
 
@@ -34,27 +43,27 @@ type Writer struct {
 // If fileMode is equal to 0, it is 0700 by default.
 //
 // Notice: fileMode is only used when writing the data.
-func NewWriter(rootDir string, info Info, fileMode os.FileMode) *Writer {
+func NewWriter(rootDir string, info Info, fileMode os.FileMode) Writer {
 	if fileMode == 0 {
 		fileMode = 0700
 	}
 
-	return &Writer{
-		Root:  rootDir,
-		Info:  info,
-		Mode:  fileMode,
+	return &writer{
+		root:  rootDir,
+		info:  info,
+		mode:  fileMode,
 		files: make(map[string]*os.File, len(info.Files)),
 	}
 }
 
-func (w *Writer) open(filename string) (f *os.File, err error) {
+func (w *writer) open(filename string) (f *os.File, err error) {
 	if w.files == nil {
-		w.files = make(map[string]*os.File, len(w.Info.Files))
+		w.files = make(map[string]*os.File, len(w.info.Files))
 	}
 
 	f, ok := w.files[filename]
 	if !ok {
-		mode := w.Mode
+		mode := w.mode
 		if mode == 0 {
 			mode = 0700
 		}
@@ -69,8 +78,10 @@ func (w *Writer) open(filename string) (f *os.File, err error) {
 	return
 }
 
+func (w *writer) Info() Info { return w.info }
+
 // Close implements the interface io.Closer to closes the opened files.
-func (w *Writer) Close() error {
+func (w *writer) Close() error {
 	for name, file := range w.files {
 		if file != nil {
 			file.Close()
@@ -81,17 +92,17 @@ func (w *Writer) Close() error {
 }
 
 // WriteBlock writes a data block.
-func (w *Writer) WriteBlock(p []byte, pieceIndex, pieceOffset uint32) (int, error) {
-	return w.WriteAt(p, w.Info.PieceOffset(pieceIndex, pieceOffset))
+func (w *writer) WriteBlock(pieceIndex, pieceOffset uint32, p []byte) (int, error) {
+	return w.WriteAt(p, w.info.PieceOffset(pieceIndex, pieceOffset))
 }
 
 // WriteAt implements the interface io.WriterAt.
-func (w *Writer) WriteAt(p []byte, offset int64) (n int, err error) {
+func (w *writer) WriteAt(p []byte, offset int64) (n int, err error) {
 	var m int
 	var f *os.File
 
 	for _len := len(p); n < _len; {
-		file, fileOffset := w.Info.GetFileByOffset(offset)
+		file, fileOffset := w.info.GetFileByOffset(offset)
 		if file.Length == 0 {
 			break
 		}
@@ -103,7 +114,7 @@ func (w *Writer) WriteAt(p []byte, offset int64) (n int, err error) {
 			break
 		}
 
-		filename := file.PathWithPrefix(w.Root, w.Info)
+		filename := file.PathWithPrefix(w.root, w.info)
 		if f, err = w.open(filename); err != nil {
 			break
 		}
@@ -114,6 +125,8 @@ func (w *Writer) WriteAt(p []byte, offset int64) (n int, err error) {
 		if err != nil {
 			break
 		}
+
+		f.Sync()
 	}
 
 	return
