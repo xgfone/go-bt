@@ -24,6 +24,7 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"time"
 
 	"github.com/xgfone/bt/metainfo"
 	pp "github.com/xgfone/bt/peerprotocol"
@@ -59,6 +60,9 @@ type TorrentDownloaderConfig struct {
 	//
 	// The default is 128.
 	WorkerNum int
+
+	// DialTimeout is the timeout used by dialing to the peer on TCP.
+	DialTimeout time.Duration
 
 	// ErrorLog is used to log the error.
 	//
@@ -174,7 +178,7 @@ func (d *TorrentDownloader) worker() {
 func (d *TorrentDownloader) download(host string, port uint16,
 	peerID, infohash metainfo.Hash) (err error) {
 	addr := net.JoinHostPort(host, strconv.FormatUint(uint64(port), 10))
-	conn, err := pp.NewPeerConnByDial(addr, d.conf.ID, infohash)
+	conn, err := pp.NewPeerConnByDial(addr, d.conf.ID, infohash, d.conf.DialTimeout)
 	if err != nil {
 		return fmt.Errorf("fail to dial to '%s': %s", addr, err)
 	}
