@@ -219,8 +219,8 @@ func (d *TorrentDownloader) download(host string, port uint16,
 		}
 
 		switch msg.Type {
-		case pp.Extended:
-		case pp.Port:
+		case pp.MTypeExtended:
+		case pp.MTypePort:
 			if d.ondht != nil {
 				d.ondht(host, msg.Port)
 			}
@@ -310,7 +310,7 @@ func (d *TorrentDownloader) requestPieces(conn *pp.PeerConn, utMetadataID uint8,
 		}
 
 		msg := pp.Message{
-			Type:            pp.Extended,
+			Type:            pp.MTypeExtended,
 			ExtendedID:      utMetadataID,
 			ExtendedPayload: payload,
 		}
