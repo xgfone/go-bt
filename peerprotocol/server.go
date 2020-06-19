@@ -85,10 +85,11 @@ func (c *Config) set(conf ...Config) {
 
 // Server is used to implement the peer protocol server.
 type Server struct {
-	ln net.Listener
-	id metainfo.Hash
-	h  Handler
-	c  Config
+	net.Listener
+
+	ID      metainfo.Hash // Required
+	Handler Handler       // Required
+	Config  Config        // Optional
 }
 
 // NewServerByListen returns a new Server by listening on the address.
@@ -109,15 +110,16 @@ func NewServer(ln net.Listener, id metainfo.Hash, h Handler, c ...Config) *Serve
 
 	var conf Config
 	conf.set(c...)
-	return &Server{ln: ln, id: id, h: h, c: conf}
+	return &Server{Listener: ln, ID: id, Handler: h, Config: conf}
 }
 
 // Run starts the peer protocol server.
 func (s *Server) Run() {
+	s.Config.set()
 	for {
-		conn, err := s.ln.Accept()
+		conn, err := s.Listener.Accept()
 		if err != nil {
-			s.c.ErrorLog("fail to accept new connection: %s", err)
+			s.Config.ErrorLog("fail to accept new connection: %s", err)
 		}
 		go s.handleConn(conn)
 	}
@@ -125,17 +127,17 @@ func (s *Server) Run() {
 
 func (s *Server) handleConn(conn net.Conn) {
 	pc := &PeerConn{
-		ID:         s.id,
+		ID:         s.ID,
 		Conn:       conn,
-		ExtBits:    s.c.ExtBits,
-		Timeout:    s.c.Timeout,
-		MaxLength:  s.c.MaxLength,
+		ExtBits:    s.Config.ExtBits,
+		Timeout:    s.Config.Timeout,
+		MaxLength:  s.Config.MaxLength,
 		Choked:     true,
 		PeerChoked: true,
 	}
 
 	if err := s.handlePeerMessage(pc); err != nil {
-		s.c.ErrorLog(err.Error())
+		s.Config.ErrorLog(err.Error())
 	}
 }
 
@@ -143,12 +145,12 @@ func (s *Server) handlePeerMessage(pc *PeerConn) (err error) {
 	defer pc.Close()
 	if err = pc.Handshake(); err != nil {
 		return fmt.Errorf("fail to handshake with '%s': %s", pc.RemoteAddr().String(), err)
-	} else if err = s.h.OnHandShake(pc); err != nil {
+	} else if err = s.Handler.OnHandShake(pc); err != nil {
 		return fmt.Errorf("handshake error with '%s': %s", pc.RemoteAddr().String(), err)
 	}
 
-	defer s.h.OnClose(pc)
-	return s.loopRun(pc, s.h)
+	defer s.Handler.OnClose(pc)
+	return s.loopRun(pc, s.Handler)
 }
 
 // LoopRun loops running Read-Handle message.
@@ -168,7 +170,7 @@ func (s *Server) loopRun(pc *PeerConn, handler Handler) error {
 				pc.RemoteAddr().String(), s)
 		}
 
-		if err = s.c.HandleMessage(pc, msg, handler); err != nil {
+		if err = s.Config.HandleMessage(pc, msg, handler); err != nil {
 			return fmt.Errorf("fail to handle peer message from '%s': %s",
 				pc.RemoteAddr().String(), err)
 		}
