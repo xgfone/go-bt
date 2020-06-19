@@ -30,7 +30,8 @@ import (
 	pp "github.com/xgfone/bt/peerprotocol"
 )
 
-const peerBlockSize = 16384 // 16KiB.
+// BlockSize is the size of a block of the piece.
+const BlockSize = 16384 // 16KiB.
 
 // Request is used to send a download request.
 type request struct {
@@ -246,8 +247,8 @@ func (d *TorrentDownloader) download(host string, port uint16,
 			}
 
 			metadataSize = ehmsg.MetadataSize
-			piecesNum = metadataSize / peerBlockSize
-			if metadataSize%peerBlockSize != 0 {
+			piecesNum = metadataSize / BlockSize
+			if metadataSize%BlockSize != 0 {
 				piecesNum++
 			}
 
@@ -268,8 +269,8 @@ func (d *TorrentDownloader) download(host string, port uint16,
 			}
 
 			pieceLen := len(utmsg.Data)
-			if (utmsg.Piece != piecesNum-1 && pieceLen != peerBlockSize) ||
-				(utmsg.Piece == piecesNum-1 && pieceLen != metadataSize%peerBlockSize) {
+			if (utmsg.Piece != piecesNum-1 && pieceLen != BlockSize) ||
+				(utmsg.Piece == piecesNum-1 && pieceLen != metadataSize%BlockSize) {
 				return
 			}
 			pieces[utmsg.Piece] = utmsg.Data
