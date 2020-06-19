@@ -20,24 +20,57 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"sort"
 )
 
 var errMessageTooLong = fmt.Errorf("the peer message is too long")
+
+// Pieces is used to represent the list of the indexes of the pieces.
+type Pieces []uint32
+
+// Sort sorts itself.
+func (ps Pieces) Sort()              { sort.Sort(ps) }
+func (ps Pieces) Len() int           { return len(ps) }
+func (ps Pieces) Less(i, j int) bool { return ps[i] < ps[j] }
+func (ps Pieces) Swap(i, j int)      { ps[i], ps[j] = ps[j], ps[i] }
+
+// Append appends the piece index, sorts and returns the new index list.
+func (ps Pieces) Append(index uint32) Pieces {
+	for _, p := range ps {
+		if p == index {
+			return ps
+		}
+	}
+
+	pieces := append(ps, index)
+	sort.Sort(pieces)
+	return pieces
+}
+
+// Remove removes the given piece index from the list and returns new list.
+func (ps Pieces) Remove(index uint32) Pieces {
+	for i, p := range ps {
+		if p == index {
+			copy(ps[i:], ps[i+1:])
+			return ps[:len(ps)-1]
+		}
+	}
+	return ps
+}
 
 // BitField represents the bit field of the pieces.
 type BitField []uint8
 
 // NewBitField returns a new BitField to hold the pieceNum pieces.
-func NewBitField(pieceNum int) BitField {
-	return make(BitField, (pieceNum+7)/8)
-}
-
-// NewBitFieldTrue is the same as NewBitField, but set all bits to 1.
-func NewBitFieldTrue(pieceNum int) BitField {
+//
+// If set is set to true, it will set all the bit fields to 1.
+func NewBitField(pieceNum int, set ...bool) BitField {
 	_len := (pieceNum + 7) / 8
 	bf := make(BitField, _len)
-	for i := 0; i < _len; i++ {
-		bf[i] = 0xff
+	if len(set) > 0 && set[0] {
+		for i := 0; i < _len; i++ {
+			bf[i] = 0xff
+		}
 	}
 	return bf
 }
@@ -68,19 +101,50 @@ func (bf BitField) Bools() []bool {
 	return bs
 }
 
+// Sets returns the indexes of all the pieces that are set to 1.
+func (bf BitField) Sets() (pieces Pieces) {
+	_len := len(bf) * 8
+	for i := 0; i < _len; i++ {
+		index := uint32(i)
+		if bf.IsSet(index) {
+			pieces = append(pieces, index)
+		}
+	}
+	return
+}
+
+// Unsets returns the indexes of all the pieces that are set to 0.
+func (bf BitField) Unsets() (pieces Pieces) {
+	_len := len(bf) * 8
+	for i := 0; i < _len; i++ {
+		index := uint32(i)
+		if !bf.IsSet(index) {
+			pieces = append(pieces, index)
+		}
+	}
+	return
+}
+
 // Set sets the bit of the piece to 1 by its index.
 func (bf BitField) Set(index uint32) {
-	bf[index/8] |= (1 << byte(7-index%8))
+	if i := int(index) / 8; i < len(bf) {
+		bf[i] |= (1 << byte(7-index%8))
+	}
 }
 
 // Unset sets the bit of the piece to 0 by its index.
 func (bf BitField) Unset(index uint32) {
-	bf[index/8] &^= (1 << byte(7-index%8))
+	if i := int(index) / 8; i < len(bf) {
+		bf[i] &^= (1 << byte(7-index%8))
+	}
 }
 
 // IsSet reports whether the bit of the piece is set to 1.
-func (bf BitField) IsSet(index uint32) bool {
-	return bf[index/8]&(1<<byte(7-index%8)) != 0
+func (bf BitField) IsSet(index uint32) (set bool) {
+	if i := int(index) / 8; i < len(bf) {
+		set = bf[i]&(1<<byte(7-index%8)) != 0
+	}
+	return
 }
 
 // Message is the message used by the peer protocol, which contains
@@ -176,7 +240,7 @@ func (m *Message) Decode(r io.Reader, maxLength uint32) (err error) {
 	var length uint32
 	if err = binary.Read(r, binary.BigEndian, &length); err != nil {
 		if err != io.EOF {
-			err = fmt.Errorf("error reading peer message message length: %s", err)
+			err = fmt.Errorf("reading length error: %s", err)
 		}
 		return
 	}

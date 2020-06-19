@@ -14,7 +14,9 @@
 
 package peerprotocol
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestBitField(t *testing.T) {
 	bf := NewBitFieldFromBools([]bool{
@@ -51,9 +53,32 @@ func TestBitField(t *testing.T) {
 		t.Error(10)
 	}
 
-	bf = NewBitFieldTrue(16)
+	bf = NewBitField(16, true)
 	if !bf.IsSet(0) || !bf.IsSet(1) || !bf.IsSet(2) || !bf.IsSet(3) ||
 		!bf.IsSet(4) || !bf.IsSet(5) || !bf.IsSet(6) || !bf.IsSet(7) {
 		t.Error(bf)
+	}
+}
+
+func TestPieces(t *testing.T) {
+	ps := Pieces{2, 3, 4, 5}
+	ps = ps.Append(1)
+	if len(ps) != 5 || ps[0] != 1 {
+		t.Fatal(ps)
+	}
+
+	ps = ps.Append(5)
+	if len(ps) != 5 {
+		t.Fatal(ps)
+	}
+
+	ps = ps.Remove(6)
+	if len(ps) != 5 {
+		t.Fatal(ps)
+	}
+
+	ps = ps.Remove(3)
+	if len(ps) != 4 || ps[0] != 1 || ps[1] != 2 || ps[2] != 4 || ps[3] != 5 {
+		t.Fatal(ps)
 	}
 }

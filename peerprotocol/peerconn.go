@@ -27,10 +27,13 @@ import (
 
 // Predefine some errors about extension support.
 var (
+	ErrChoked             = fmt.Errorf("choked")
 	ErrNotFirstMsg        = fmt.Errorf("not the first message")
 	ErrNotSupportDHT      = fmt.Errorf("not support DHT extension")
 	ErrNotSupportFast     = fmt.Errorf("not support Fast extension")
 	ErrNotSupportExtended = fmt.Errorf("not support Extended extension")
+	ErrSecondExtHandshake = fmt.Errorf("second extended handshake")
+	ErrNoExtHandshake     = fmt.Errorf("no extended handshake")
 )
 
 // Bep3Handler is used to handle the BEP 3 type message if Handler has also
@@ -72,7 +75,7 @@ type Bep6Handler interface {
 //
 // Notice: the server must enable the Extended extension bit.
 type Bep10Handler interface {
-	OnHandShake(conn *PeerConn, exthmsg ExtendedHandshakeMsg) error
+	OnExtHandShake(conn *PeerConn) error
 	OnPayload(conn *PeerConn, extid uint8, payload []byte) error
 }
 
@@ -128,6 +131,14 @@ type PeerConn struct {
 	// The default is 0, which represents no limit.
 	MaxLength uint32
 
+	Fasts    Pieces   // The list of the indexes of the FAST pieces.
+	Suggests Pieces   // The list of the indexes of the SUGGEST pieces.
+	BitField BitField // The bit field of the piece indexes.
+
+	// ExtendedHandshakeMsg is the handshake message of the extension
+	// from the remote peer.
+	ExtendedHandshakeMsg ExtendedHandshakeMsg
+
 	// Data is used to store the context data associated with the connection.
 	Data interface{}
 
@@ -137,7 +148,8 @@ type PeerConn struct {
 	// Optional.
 	OnWriteMsg func(pc *PeerConn, m Message) error
 
-	notFirstMsg bool
+	notFirstMsg  bool
+	extHandshake bool
 }
 
 // NewPeerConn returns a new PeerConn.
@@ -481,10 +493,13 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 	case MTypeBitField:
 		if pc.notFirstMsg {
 			err = ErrNotFirstMsg
-		} else if h, ok := handler.(Bep3Handler); ok {
-			err = h.BitField(pc, msg.BitField)
 		} else {
-			err = handler.OnMessage(pc, msg)
+			pc.BitField = msg.BitField
+			if h, ok := handler.(Bep3Handler); ok {
+				err = h.BitField(pc, msg.BitField)
+			} else {
+				err = handler.OnMessage(pc, msg)
+			}
 		}
 	case MTypeRequest:
 		if h, ok := handler.(Bep3Handler); ok {
@@ -519,10 +534,13 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 	case MTypeSuggest:
 		if !pc.ExtBits.IsSupportFast() {
 			err = ErrNotSupportFast
-		} else if h, ok := handler.(Bep6Handler); ok {
-			err = h.Suggest(pc, msg.Index)
 		} else {
-			err = handler.OnMessage(pc, msg)
+			pc.Suggests = pc.Suggests.Append(msg.Index)
+			if h, ok := handler.(Bep6Handler); ok {
+				err = h.Suggest(pc, msg.Index)
+			} else {
+				err = handler.OnMessage(pc, msg)
+			}
 		}
 	case MTypeHaveAll:
 		if pc.notFirstMsg {
@@ -555,10 +573,13 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 	case MTypeAllowedFast:
 		if !pc.ExtBits.IsSupportFast() {
 			err = ErrNotSupportFast
-		} else if h, ok := handler.(Bep6Handler); ok {
-			err = h.AllowedFast(pc, msg.Index)
 		} else {
-			err = handler.OnMessage(pc, msg)
+			pc.Fasts = pc.Fasts.Append(msg.Index)
+			if h, ok := handler.(Bep6Handler); ok {
+				err = h.AllowedFast(pc, msg.Index)
+			} else {
+				err = handler.OnMessage(pc, msg)
+			}
 		}
 
 	// BEP 10 - Extension Protocol
@@ -585,12 +606,19 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 
 func (pc *PeerConn) handleExtMsg(h Bep10Handler, m Message) (err error) {
 	if m.ExtendedID == ExtendedIDHandshake {
-		var ehmsg ExtendedHandshakeMsg
-		if err = bencode.DecodeBytes(m.ExtendedPayload, &ehmsg); err == nil {
-			err = h.OnHandShake(pc, ehmsg)
+		if pc.extHandshake {
+			return ErrSecondExtHandshake
 		}
-	} else {
+
+		pc.extHandshake = true
+		err = bencode.DecodeBytes(m.ExtendedPayload, &pc.ExtendedHandshakeMsg)
+		if err == nil {
+			err = h.OnExtHandShake(pc)
+		}
+	} else if pc.extHandshake {
 		err = h.OnPayload(pc, m.ExtendedID, m.ExtendedPayload)
+	} else {
+		err = ErrNoExtHandshake
 	}
 
 	return

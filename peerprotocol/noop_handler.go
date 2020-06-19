@@ -99,8 +99,8 @@ func (NoopBep6Handler) Reject(*PeerConn, uint32, uint32, uint32) error { return 
 // the noop interface methods.
 type NoopBep10Handler struct{}
 
-// OnHandShake implements the interface Bep10Handler#OnHandShake.
-func (NoopBep10Handler) OnHandShake(*PeerConn, ExtendedHandshakeMsg) error { return nil }
+// OnExtHandShake implements the interface Bep10Handler#OnExtHandShake.
+func (NoopBep10Handler) OnExtHandShake(*PeerConn) error { return nil }
 
 // OnPayload implements the interface Bep10Handler#OnPayload.
 func (NoopBep10Handler) OnPayload(*PeerConn, uint8, []byte) error { return nil }
