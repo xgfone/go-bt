@@ -16,6 +16,7 @@ package tracker
 
 import (
 	"context"
+	"net/url"
 	"sync"
 
 	"github.com/xgfone/bt/metainfo"
@@ -32,8 +33,12 @@ type GetPeersResult struct {
 //
 // Notice: the returned chan will be closed when all the requests end.
 func GetPeers(ctx context.Context, id, infohash metainfo.Hash, trackers []string) <-chan GetPeersResult {
-	conf := ClientConfig{ID: id}
-	req := AnnounceRequest{InfoHash: infohash}
+	for i, t := range trackers {
+		if u, err := url.Parse(t); err == nil && u.Path == "" {
+			u.Path = "/announce"
+			trackers[i] = u.String()
+		}
+	}
 
 	_len := len(trackers)
 	clen := _len
@@ -41,8 +46,10 @@ func GetPeers(ctx context.Context, id, infohash metainfo.Hash, trackers []string
 		clen = 10
 	}
 
-	clients := make(chan Client, clen)
+	conf := ClientConfig{ID: id}
+	req := AnnounceRequest{InfoHash: infohash}
 	resps := make(chan GetPeersResult, _len)
+	clients := make(chan Client, clen)
 
 	wg := new(sync.WaitGroup)
 	wg.Add(_len)
@@ -69,7 +76,7 @@ func GetPeers(ctx context.Context, id, infohash metainfo.Hash, trackers []string
 		for _, t := range trackers {
 			client, err := NewClient(t, conf)
 			if err != nil {
-				resps <- GetPeersResult{Error: err}
+				resps <- GetPeersResult{Error: err, Tracker: t}
 			} else {
 				clients <- client
 			}
