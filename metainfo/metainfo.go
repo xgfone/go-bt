@@ -35,13 +35,12 @@ func (al AnnounceList) Unique() (announces []string) {
 	announces = make([]string, 0, len(al))
 	for _, tier := range al {
 		for _, v := range tier {
-			if v != "" && utils.InStringSlice(announces, v) {
+			if v != "" && !utils.InStringSlice(announces, v) {
 				announces = append(announces, v)
 			}
 		}
 	}
-
-	return nil
+	return
 }
 
 // URLList represents a list of the url.
