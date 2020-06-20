@@ -187,8 +187,7 @@ func downloadFileFromPeer(peer string, id, infohash metainfo.Hash, dm *downloadM
 }
 
 func newDownloadManager(w metainfo.Writer, info metainfo.Info) *downloadManager {
-	// length := info.PieceLength
-	length := info.AllFiles()[0].Length
+	length := info.Piece(0).Length()
 	return &downloadManager{writer: w, plength: length}
 }
 
@@ -236,7 +235,7 @@ func (dm *downloadManager) RequestBlock(pc *pp.PeerConn) (err error) {
 		}
 
 		dm.poffset = 0
-		dm.plength = dm.writer.Info().PieceLength
+		dm.plength = dm.writer.Info().Piece(int(dm.pindex)).Length()
 	}
 
 	index := dm.pindex
