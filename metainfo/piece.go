@@ -24,6 +24,15 @@ import (
 	"github.com/xgfone/bt/utils"
 )
 
+// Predefine some sizes of the pieces.
+const (
+	PieceSize256KB = 1024 * 256
+	PieceSize512KB = 2 * PieceSize256KB
+	PieceSize1MB   = 2 * PieceSize512KB
+	PieceSize2MB   = 2 * PieceSize1MB
+	PieceSize4MB   = 2 * PieceSize2MB
+)
+
 // Piece represents a torrent file piece.
 type Piece struct {
 	info  Info
