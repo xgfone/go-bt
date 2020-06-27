@@ -92,7 +92,7 @@ func ExampleServer() {
 
 	// Create first DHT server
 	pm := newTestPeerManager()
-	server1, err := newDHTServer(id1, ":9001", pm)
+	server1, err := newDHTServer(id1, "127.0.0.1:9001", pm)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -100,7 +100,7 @@ func ExampleServer() {
 	defer server1.Close()
 
 	// Create second DHT server
-	server2, err := newDHTServer(id2, ":9002", nil)
+	server2, err := newDHTServer(id2, "127.0.0.1:9002", nil)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -108,7 +108,7 @@ func ExampleServer() {
 	defer server2.Close()
 
 	// Create third DHT server
-	server3, err := newDHTServer(id3, ":9003", nil)
+	server3, err := newDHTServer(id3, "127.0.0.1:9003", nil)
 	if err != nil {
 		fmt.Println(err)
 		return

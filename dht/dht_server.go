@@ -81,6 +81,7 @@ type Config struct {
 	// If not given, it will detect the address family of the server listens
 	// automatically and set the supported ip protocol stack by the address
 	// family. If fails, the default is []IPProtocolStack{IPv4Protocol}.
+	// For the empty address, it supports the ipv4/ipv6 protocols by default.
 	// So, if the server is listening on the empty address, such as ":6881",
 	// and only supports IPv6, you should specify it to "IPv6Protocol".
 	IPProtocols []IPProtocolStack
@@ -220,8 +221,7 @@ type Server struct {
 	ipv6 bool
 	want []krpc.Want
 
-	peerManager PeerManager
-	// routingTable       *routingTable
+	peerManager        PeerManager
 	routingTable4      *routingTable
 	routingTable6      *routingTable
 	tokenManager       *tokenManager
@@ -238,7 +238,9 @@ func NewServer(conn net.PacketConn, config ...Config) *Server {
 		host, _, err := net.SplitHostPort(conn.LocalAddr().String())
 		if err != nil {
 			panic(err)
-		} else if ip := net.ParseIP(host); ipIsZero(ip) || ip.To4() != nil {
+		} else if ip := net.ParseIP(host); ipIsZero(ip) {
+			conf.IPProtocols = []IPProtocolStack{IPv4Protocol, IPv6Protocol}
+		} else if ip.To4() != nil {
 			conf.IPProtocols = []IPProtocolStack{IPv4Protocol}
 		} else {
 			conf.IPProtocols = []IPProtocolStack{IPv6Protocol}
