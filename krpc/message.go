@@ -100,19 +100,21 @@ func (m Message) IsError() bool {
 
 // RID returns the value named "id" in "r".
 //
-// Return "" instead if no "id".
+// Return the ZERO value instead if no "id".
 func (m Message) RID() metainfo.Hash {
 	return m.R.ID
 }
 
 // QID returns the value named "id" in "a", that's, the query arguments.
 //
-// Return "" instead if no "id".
+// Return the ZERO value instead if no "id".
 func (m Message) QID() metainfo.Hash {
 	return m.A.ID
 }
 
 // ID returns the QID or RID.
+//
+// Notice: it will panic if the the message is not a query or response.
 func (m Message) ID() metainfo.Hash {
 	switch m.Y {
 	case "q":
