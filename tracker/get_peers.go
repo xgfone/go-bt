@@ -32,7 +32,11 @@ type GetPeersResult struct {
 // GetPeers gets the peers from the trackers.
 //
 // Notice: the returned chan will be closed when all the requests end.
-func GetPeers(ctx context.Context, id, infohash metainfo.Hash, trackers []string) <-chan GetPeersResult {
+func GetPeers(ctx context.Context, id, infohash metainfo.Hash, trackers []string) []GetPeersResult {
+	if len(trackers) == 0 {
+		return nil
+	}
+
 	for i, t := range trackers {
 		if u, err := url.Parse(t); err == nil && u.Path == "" {
 			u.Path = "/announce"
@@ -41,54 +45,52 @@ func GetPeers(ctx context.Context, id, infohash metainfo.Hash, trackers []string
 	}
 
 	_len := len(trackers)
-	clen := _len
-	if clen > 10 {
-		clen = 10
+	wlen := _len
+	if wlen > 10 {
+		wlen = 10
 	}
 
-	conf := ClientConfig{ID: id}
-	req := AnnounceRequest{InfoHash: infohash}
-	resps := make(chan GetPeersResult, _len)
-	clients := make(chan Client, clen)
+	reqs := make(chan string, wlen)
+	go func() {
+		for i := 0; i < _len; i++ {
+			reqs <- trackers[i]
+		}
+	}()
 
 	wg := new(sync.WaitGroup)
 	wg.Add(_len)
 
-	go func() {
-		wg.Wait()
-		close(resps)
-	}()
-
-	for i := 0; i < clen; i++ {
-		go func(i int) {
-			for client := range clients {
-				resp, err := getPeers(ctx, wg, client, req)
-				resps <- GetPeersResult{
-					Tracker: client.String(),
+	var lock sync.Mutex
+	results := make([]GetPeersResult, 0, _len)
+	for i := 0; i < wlen; i++ {
+		go func() {
+			for tracker := range reqs {
+				resp, err := getPeers(ctx, wg, tracker, id, infohash)
+				lock.Lock()
+				results = append(results, GetPeersResult{
+					Tracker: tracker,
 					Error:   err,
 					Resp:    resp,
-				}
+				})
+				lock.Unlock()
 			}
-		}(i)
+		}()
 	}
 
-	go func() {
-		for _, t := range trackers {
-			client, err := NewClient(t, conf)
-			if err != nil {
-				resps <- GetPeersResult{Error: err, Tracker: t}
-			} else {
-				clients <- client
-			}
-		}
-		close(clients)
-	}()
+	wg.Wait()
+	close(reqs)
 
-	return resps
+	return results
 }
 
-func getPeers(ctx context.Context, wg *sync.WaitGroup, client Client,
-	req AnnounceRequest) (AnnounceResponse, error) {
+func getPeers(ctx context.Context, wg *sync.WaitGroup, tracker string,
+	nodeID, infoHash metainfo.Hash) (resp AnnounceResponse, err error) {
 	defer wg.Done()
-	return client.Announce(ctx, req)
+
+	client, err := NewClient(tracker, ClientConfig{ID: nodeID})
+	if err == nil {
+		resp, err = client.Announce(ctx, AnnounceRequest{InfoHash: infoHash})
+	}
+
+	return
 }
