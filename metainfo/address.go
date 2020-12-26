@@ -72,7 +72,11 @@ func NewAddressesFromString(s string) (addrs []Address, err error) {
 
 	addrs = make([]Address, len(ips))
 	for i, ip := range ips {
-		addrs[i] = Address{IP: ip, Port: port}
+		if ipv4 := ip.To4(); len(ipv4) != 0 {
+			addrs[i] = Address{IP: ipv4, Port: port}
+		} else {
+			addrs[i] = Address{IP: ip, Port: port}
+		}
 	}
 
 	return
@@ -112,7 +116,7 @@ func (a *Address) FromString(addr string) (err error) {
 func (a *Address) FromUDPAddr(ua *net.UDPAddr) {
 	a.Port = uint16(ua.Port)
 	a.IP = ua.IP
-	if ipv4 := a.IP.To4(); len(ipv4) > 0 {
+	if ipv4 := a.IP.To4(); len(ipv4) != 0 {
 		a.IP = ipv4
 	}
 }
@@ -181,15 +185,19 @@ func (a Address) MarshalBinary() (data []byte, err error) {
 
 func (a *Address) decode(vs []interface{}) (err error) {
 	defer func() {
-		if e := recover(); e != nil {
-			err = e.(error)
+		switch e := recover().(type) {
+		case nil:
+		case error:
+			err = e
+		default:
+			err = fmt.Errorf("%v", e)
 		}
 	}()
 
 	host := vs[0].(string)
 	if a.IP = net.ParseIP(host); len(a.IP) == 0 {
 		return ErrInvalidAddr
-	} else if ip := a.IP.To4(); len(ip) > 0 {
+	} else if ip := a.IP.To4(); len(ip) != 0 {
 		a.IP = ip
 	}
 
@@ -277,7 +285,7 @@ func (a HostAddress) String() string {
 
 // Addresses parses the host address to a list of Addresses.
 func (a HostAddress) Addresses() (addrs []Address, err error) {
-	if ip := net.ParseIP(a.Host); len(ip) > 0 {
+	if ip := net.ParseIP(a.Host); len(ip) != 0 {
 		return []Address{NewAddress(ip, a.Port)}, nil
 	}
 
@@ -301,8 +309,12 @@ func (a HostAddress) Equal(o HostAddress) bool {
 
 func (a *HostAddress) decode(vs []interface{}) (err error) {
 	defer func() {
-		if e := recover(); e != nil {
-			err = e.(error)
+		switch e := recover().(type) {
+		case nil:
+		case error:
+			err = e
+		default:
+			err = fmt.Errorf("%v", e)
 		}
 	}()
 

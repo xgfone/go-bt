@@ -101,7 +101,7 @@ func (f File) FilePieces(info Info) (fps FilePieces) {
 		}}
 	}
 
-	fps = make(FilePieces, 0, endPieceIndex-startPieceIndex)
+	fps = make(FilePieces, 0, endPieceIndex-startPieceIndex+1)
 	fps = append(fps, FilePiece{
 		Index:  uint32(startPieceIndex),
 		Offset: uint32(startPieceOffset),

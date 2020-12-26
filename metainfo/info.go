@@ -127,8 +127,14 @@ func (info Info) PieceOffset(index, offset uint32) int64 {
 }
 
 // GetFileByOffset returns the file and its offset by the total offset.
+//
+// If fileOffset is eqaul to file.Length, it means to reach the end.
 func (info Info) GetFileByOffset(offset int64) (file File, fileOffset int64) {
 	if !info.IsDir() {
+		if offset > info.Length {
+			panic(fmt.Errorf("offset '%d' exceeds the maximum length '%d'",
+				offset, info.Length))
+		}
 		return File{Length: info.Length}, offset
 	}
 
@@ -138,6 +144,11 @@ func (info Info) GetFileByOffset(offset int64) (file File, fileOffset int64) {
 			return
 		}
 		fileOffset -= file.Length
+	}
+
+	if fileOffset > file.Length {
+		panic(fmt.Errorf("offset '%d' exceeds the maximum length '%d'",
+			offset, info.TotalLength()))
 	}
 
 	return

@@ -69,16 +69,14 @@ func (r *reader) ReadAt(p []byte, offset int64) (n int, err error) {
 
 	for _len := len(p); n < _len; {
 		file, fileOffset := r.info.GetFileByOffset(offset)
-		if file.Length == 0 {
+		if file.Length == 0 || file.Length == fileOffset {
+			err = io.EOF
 			break
 		}
 
-		length := int(file.Length-fileOffset) + n
-		if _len < length {
-			length = _len
-		} else if length <= n {
-			err = io.EOF
-			break
+		pend := n + int(file.Length-fileOffset)
+		if pend > _len {
+			pend = _len
 		}
 
 		filename := file.PathWithPrefix(r.root, r.info)
@@ -86,7 +84,7 @@ func (r *reader) ReadAt(p []byte, offset int64) (n int, err error) {
 			break
 		}
 
-		m, err = f.ReadAt(p[n:length], fileOffset)
+		m, err = f.ReadAt(p[n:pend], fileOffset)
 		n += m
 		offset += int64(m)
 		if err != nil {

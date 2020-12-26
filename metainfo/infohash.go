@@ -20,7 +20,9 @@ import (
 	"crypto/sha1"
 	"encoding/base32"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
 
 	"github.com/xgfone/bt/bencode"
 )
@@ -94,6 +96,26 @@ func (h Hash) HexString() string {
 // IsZero reports whether the whole hash is zero.
 func (h Hash) IsZero() bool {
 	return h == zeroHash
+}
+
+// WriteBinary is the same as MarshalBinary, but writes the result into w
+// instead of returning.
+func (h Hash) WriteBinary(w io.Writer) (m int, err error) {
+	return w.Write(h[:])
+}
+
+// UnmarshalBinary implements the interface binary.BinaryUnmarshaler.
+func (h *Hash) UnmarshalBinary(b []byte) (err error) {
+	if len(b) < HashSize {
+		return errors.New("Hash.UnmarshalBinary: too few bytes")
+	}
+	copy((*h)[:], b[:HashSize])
+	return
+}
+
+// MarshalBinary implements the interface binary.BinaryMarshaler.
+func (h Hash) MarshalBinary() (data []byte, err error) {
+	return h[:], nil
 }
 
 // MarshalBencode implements the interface bencode.Marshaler.

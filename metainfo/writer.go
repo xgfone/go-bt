@@ -40,12 +40,12 @@ type writer struct {
 
 // NewWriter returns a new Writer.
 //
-// If fileMode is equal to 0, it is 0700 by default.
+// If fileMode is equal to 0, it is 0600 by default.
 //
 // Notice: fileMode is only used when writing the data.
 func NewWriter(rootDir string, info Info, fileMode os.FileMode) Writer {
 	if fileMode == 0 {
-		fileMode = 0700
+		fileMode = 0600
 	}
 
 	return &writer{
@@ -63,13 +63,8 @@ func (w *writer) open(filename string) (f *os.File, err error) {
 
 	f, ok := w.files[filename]
 	if !ok {
-		mode := w.mode
-		if mode == 0 {
-			mode = 0700
-		}
-
-		if err = os.MkdirAll(filepath.Dir(filename), mode); err == nil {
-			if f, err = os.OpenFile(filename, wflag, 0700); err == nil {
+		if err = os.MkdirAll(filepath.Dir(filename), 0700); err == nil {
+			if f, err = os.OpenFile(filename, wflag, w.mode); err == nil {
 				w.files[filename] = f
 			}
 		}
@@ -103,7 +98,8 @@ func (w *writer) WriteAt(p []byte, offset int64) (n int, err error) {
 
 	for _len := len(p); n < _len; {
 		file, fileOffset := w.info.GetFileByOffset(offset)
-		if file.Length == 0 {
+		if file.Length == 0 || file.Length == fileOffset {
+			err = io.ErrShortWrite
 			break
 		}
 
