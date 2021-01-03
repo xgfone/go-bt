@@ -141,7 +141,9 @@ func (info Info) GetFileByOffset(offset int64) (file File, fileOffset int64) {
 	fileOffset = offset
 	for i, _len := 0, len(info.Files)-1; i <= _len; i++ {
 		file = info.Files[i]
-		if i == _len || fileOffset < file.Length {
+		if fileOffset < file.Length {
+			return
+		} else if fileOffset == file.Length && i == _len {
 			return
 		}
 		fileOffset -= file.Length
