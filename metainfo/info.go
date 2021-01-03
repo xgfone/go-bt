@@ -135,7 +135,7 @@ func (info Info) GetFileByOffset(offset int64) (file File, fileOffset int64) {
 			panic(fmt.Errorf("offset '%d' exceeds the maximum length '%d'",
 				offset, info.Length))
 		}
-		return File{Length: info.Length}, offset
+		return File{Length: info.Length, Paths: []string{info.Name}}, offset
 	}
 
 	fileOffset = offset
