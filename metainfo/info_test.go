@@ -73,3 +73,26 @@ func TestInfo_GetFileByOffset(t *testing.T) {
 		t.Errorf("expect fileOffset='%d', but got '%d'", 300, fileOffset)
 	}
 }
+
+func TestNewInfoFromFilePath(t *testing.T) {
+	info, err := NewInfoFromFilePath("info.go", PieceSize256KB)
+	if err != nil {
+		t.Error(err)
+	} else if info.Name != "info.go" || info.Files != nil {
+		t.Errorf("invalid info %+v\n", info)
+	}
+
+	info, err = NewInfoFromFilePath("../metainfo", PieceSize256KB)
+	if err != nil {
+		t.Error(err)
+	} else if info.Name != "metainfo" || info.Files == nil || info.Length > 0 {
+		t.Errorf("invalid info %+v\n", info)
+	}
+
+	info, err = NewInfoFromFilePath("../../bt", PieceSize256KB)
+	if err != nil {
+		t.Error(err)
+	} else if info.Name != "bt" || info.Files == nil || info.Length > 0 {
+		t.Errorf("invalid info %+v\n", info)
+	}
+}
