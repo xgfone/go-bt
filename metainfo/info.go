@@ -80,6 +80,10 @@ func getAllInfoFiles(rootDir string) (files []File, err error) {
 		return nil
 	})
 
+	if err == nil && len(files) == 0 {
+		err = fmt.Errorf("no files in the directory '%s'", rootDir)
+	}
+
 	return
 }
 
