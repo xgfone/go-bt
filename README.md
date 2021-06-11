@@ -1,4 +1,4 @@
-# BT - Another Implementation Based On Golang [![Build Status](https://travis-ci.org/xgfone/bt.svg?branch=master)](https://travis-ci.org/xgfone/bt) [![GoDoc](https://godoc.org/github.com/xgfone/bt?status.svg)](https://pkg.go.dev/github.com/xgfone/bt) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](https://raw.githubusercontent.com/xgfone/bt/master/LICENSE)
+# BT - Another Implementation For Golang [![Build Status](https://api.travis-ci.com/xgfone/bt.svg?branch=master)](https://travis-ci.com/github/xgfone/bt) [![GoDoc](https://pkg.go.dev/badge/github.com/xgfone/bt)](https://pkg.go.dev/github.com/xgfone/bt) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](https://raw.githubusercontent.com/xgfone/bt/master/LICENSE)
 
 A pure golang implementation of [BitTorrent](http://bittorrent.org/beps/bep_0000.html) library, which is inspired by [dht](https://github.com/shiyanhui/dht) and [torrent](https://github.com/anacrolix/torrent).
 
