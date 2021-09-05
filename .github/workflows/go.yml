@@ -1,0 +1,27 @@
+name: Go
+on: push
+env:
+  GO111MODULE: on
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    name: Go ${{ matrix.go }}
+    strategy:
+      matrix:
+        go:
+        - '1.9'
+        - '1.10'
+        - '1.11'
+        - '1.12'
+        - '1.13'
+        - '1.14'
+        - '1.15'
+        - '1.16'
+        - '1.17'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.go }}
+    - run: go test -race
