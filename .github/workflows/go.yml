@@ -27,6 +27,7 @@ jobs:
     - run: |
         version=`go version | awk '{print $3}' | awk -F. '{print $2}'`
         if [ $version -lt 11 ]; then
-            export GOPATH=/home/runner/work/bt/bt
+            mkdir -p $GOPATH/src/github.com/xgfone
+            cp -r . $GOPATH/src/github.com/xgfone
         fi
         go test -race ./...
