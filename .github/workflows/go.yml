@@ -2,7 +2,6 @@ name: Go
 on: push
 env:
   GO111MODULE: on
-  GOPATH: .
 jobs:
   build:
     runs-on: ubuntu-18.04
@@ -25,4 +24,9 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: ${{ matrix.go }}
-    - run: go test -race ./...
+    - run: |
+        version=`go version | awk '{print $3}' | awk -F. '{print $2}'`
+        if [ $version -lt 11 ]; then
+            export GOPATH=/home/runner/work/bt/bt
+        fi
+        go test -race ./...
