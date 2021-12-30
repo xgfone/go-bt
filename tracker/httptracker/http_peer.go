@@ -39,14 +39,14 @@ type Peer struct {
 // Addresses returns the list of the addresses that the peer listens on.
 func (p Peer) Addresses() (addrs []metainfo.Address, err error) {
 	if ip := net.ParseIP(p.IP); len(ip) != 0 {
-		return []metainfo.Address{{IP: ip, Port: p.Port}}, nil
+		return []metainfo.Address{{IP: &net.IPAddr{IP: ip}, Port: p.Port}}, nil
 	}
 
 	ips, err := net.LookupIP(p.IP)
 	if _len := len(ips); err == nil && len(ips) != 0 {
 		addrs = make([]metainfo.Address, _len)
 		for i, ip := range ips {
-			addrs[i] = metainfo.Address{IP: ip, Port: p.Port}
+			addrs[i] = metainfo.Address{IP: &net.IPAddr{IP: ip}, Port: p.Port}
 		}
 	}
 

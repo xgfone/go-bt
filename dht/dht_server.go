@@ -145,7 +145,7 @@ type Config struct {
 	// that's, the "get_peers" response or "announce_peer" query.
 	//
 	// The default callback does noting.
-	OnTorrent func(infohash string, ip net.IP, port uint16)
+	OnTorrent func(infohash string, ip net.Addr, port uint16)
 
 	// HandleInMessage is used to intercept the incoming DHT message.
 	// For example, you can debug the message as the log.
@@ -200,7 +200,7 @@ func (c *Config) set(conf ...Config) {
 		c.OnSearch = func(string, net.IP, uint16) {}
 	}
 	if c.OnTorrent == nil {
-		c.OnTorrent = func(string, net.IP, uint16) {}
+		c.OnTorrent = func(string, net.Addr, uint16) {}
 	}
 	if c.HandleInMessage == nil {
 		c.HandleInMessage = c.in
@@ -324,7 +324,7 @@ func (s *Server) Node6Num() int { return s.routingTable6.Len() }
 //
 func (s *Server) AddNode(node krpc.Node) int {
 	// For IPv6
-	if isIPv6(node.Addr.IP) {
+	if node.Addr.IsIPv6() {
 		if s.ipv6 {
 			return s.routingTable6.AddNode(node)
 		}
@@ -536,7 +536,7 @@ func (s *Server) handleQuery(raddr *net.UDPAddr, m krpc.Message) {
 			return
 		}
 		s.reply(raddr, m.T, krpc.ResponseResult{})
-		s.conf.OnTorrent(m.A.InfoHash.HexString(), raddr.IP, m.A.GetPort(raddr.Port))
+		s.conf.OnTorrent(m.A.InfoHash.HexString(), &net.IPAddr{IP: raddr.IP}, m.A.GetPort(raddr.Port))
 	default:
 		s.sendError(raddr, m.T, "unknown query method", krpc.ErrorCodeMethodUnknown)
 	}

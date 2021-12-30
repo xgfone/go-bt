@@ -50,7 +50,7 @@ func (testHandler) OnAnnounce(raddr *net.UDPAddr, req AnnounceRequest) (
 		Interval:  1,
 		Leechers:  2,
 		Seeders:   3,
-		Addresses: []metainfo.Address{{IP: net.ParseIP("127.0.0.1"), Port: 8001}},
+		Addresses: []metainfo.Address{{IP: &net.IPAddr{IP: net.ParseIP("127.0.0.1")}, Port: 8001}},
 	}
 	return
 }

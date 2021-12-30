@@ -21,26 +21,38 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 
+	"github.com/eyedeekay/sam3"
+	"github.com/eyedeekay/sam3/i2pkeys"
 	"github.com/xgfone/bt/bencode"
 )
 
 // ErrInvalidAddr is returned when the compact address is invalid.
 var ErrInvalidAddr = fmt.Errorf("invalid compact information of ip and port")
+var SAMSession *sam3.SAM
 
 // Address represents a client/server listening on a UDP port implementing
 // the DHT protocol.
 type Address struct {
-	IP   net.IP // For IPv4, its length must be 4.
+	IP   net.Addr // For IPv4, its length must be 4.
 	Port uint16
 }
 
 // NewAddress returns a new Address.
-func NewAddress(ip net.IP, port uint16) Address {
-	if ipv4 := ip.To4(); len(ipv4) > 0 {
-		ip = ipv4
+func NewAddress(ip interface{}, port uint16) Address {
+	switch ip.(type) {
+	case net.IP:
+		return Address{IP: &net.IPAddr{
+			IP: ip.(net.IP),
+		}, Port: port}
+	case *net.IPAddr:
+		return Address{IP: ip.(*net.IPAddr), Port: port}
+	case i2pkeys.I2PAddr:
+		return Address{IP: ip.(*i2pkeys.I2PAddr), Port: port}
+	default:
+		return Address{IP: nil, Port: 0}
 	}
-	return Address{IP: ip, Port: port}
 }
 
 // NewAddressFromString returns a new Address by the address string.
@@ -49,11 +61,55 @@ func NewAddressFromString(s string) (addr Address, err error) {
 	return
 }
 
+func Lookup(shost string, port int) ([]Address, error) {
+	if SAMSession != nil {
+		iaddr, err := SAMSession.Lookup(shost)
+		if err != nil {
+			return nil, err
+		}
+		if strings.HasSuffix(shost, ".i2p") {
+			returnAddresses := []Address{
+				Address{IP: iaddr, Port: 6881},
+			}
+			return returnAddresses, nil
+		}
+	}
+	ips, err := net.LookupIP(shost)
+	if err != nil {
+		return nil, fmt.Errorf("fail to lookup the domain '%s': %s", shost, err)
+	}
+	returnAddrs := make([]Address, len(ips))
+	for i, ip := range ips {
+		if ipv4 := ip.To4(); len(ipv4) != 0 {
+			returnAddrs[i] = Address{
+				IP: &net.IPAddr{
+					IP: ipv4,
+				},
+				Port: uint16(port),
+			}
+		} else {
+			returnAddrs[i] = Address{
+				IP: &net.IPAddr{
+					IP: ip,
+				},
+				Port: uint16(port),
+			}
+		}
+	}
+	return returnAddrs, nil
+}
+
 // NewAddressesFromString returns a list of Addresses by the address string.
 func NewAddressesFromString(s string) (addrs []Address, err error) {
 	shost, sport, err := net.SplitHostPort(s)
 	if err != nil {
-		return nil, fmt.Errorf("invalid address '%s': %s", s, err)
+		if sport == "" && strings.HasSuffix(shost, ".i2p") {
+			//Skip the missing port error if the address is an i2p address,
+			//since the port is optional and we can assign 6881 automatically.
+			sport = "6881"
+		} else {
+			return nil, fmt.Errorf("invalid address '%s': %s", s, err)
+		}
 	}
 
 	var port uint16
@@ -65,28 +121,56 @@ func NewAddressesFromString(s string) (addrs []Address, err error) {
 		port = uint16(v)
 	}
 
+	addrs, err = Lookup(shost, int(port))
+	if err != nil {
+		return nil, fmt.Errorf("fail to lookup the domain '%s': %s", shost, err)
+	}
+	return
+}
+
+func LookupNetAddr(shost string) ([]net.Addr, error) {
+	if SAMSession != nil {
+		iaddr, err := SAMSession.Lookup(shost)
+		if err != nil {
+			return nil, err
+		}
+		if strings.HasSuffix(shost, ".i2p") {
+			returnAddresses := []net.Addr{
+				iaddr,
+			}
+			return returnAddresses, nil
+		}
+	}
 	ips, err := net.LookupIP(shost)
 	if err != nil {
 		return nil, fmt.Errorf("fail to lookup the domain '%s': %s", shost, err)
 	}
-
-	addrs = make([]Address, len(ips))
+	returnAddrs := make([]net.Addr, len(ips))
 	for i, ip := range ips {
 		if ipv4 := ip.To4(); len(ipv4) != 0 {
-			addrs[i] = Address{IP: ipv4, Port: port}
+			returnAddrs[i] = &net.IPAddr{
+				IP: ipv4,
+			}
 		} else {
-			addrs[i] = Address{IP: ip, Port: port}
+			returnAddrs[i] = &net.IPAddr{
+				IP: ip,
+			}
 		}
 	}
-
-	return
+	return returnAddrs, nil
 }
 
 // FromString parses and sets the ip from the string addr.
 func (a *Address) FromString(addr string) (err error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		return fmt.Errorf("invalid address '%s': %s", addr, err)
+		if port == "" && strings.HasSuffix(host, ".i2p") {
+			//Skip the missing port error if the address is an i2p address,
+			//since the port is optional and we can assign 6881 automatically.
+			port = "6881"
+		} else {
+			return fmt.Errorf("invalid address '%s': %s", addr, err)
+		}
 	}
 
 	if port != "" {
@@ -97,7 +181,7 @@ func (a *Address) FromString(addr string) (err error) {
 		a.Port = uint16(v)
 	}
 
-	ips, err := net.LookupIP(host)
+	ips, err := LookupNetAddr(host)
 	if err != nil {
 		return fmt.Errorf("fail to lookup the domain '%s': %s", host, err)
 	} else if len(ips) == 0 {
@@ -105,27 +189,75 @@ func (a *Address) FromString(addr string) (err error) {
 	}
 
 	a.IP = ips[0]
-	if ip := a.IP.To4(); len(ip) > 0 {
-		a.IP = ip
-	}
-
 	return
 }
 
 // FromUDPAddr sets the ip from net.UDPAddr.
 func (a *Address) FromUDPAddr(ua *net.UDPAddr) {
 	a.Port = uint16(ua.Port)
-	a.IP = ua.IP
-	if ipv4 := a.IP.To4(); len(ipv4) != 0 {
-		a.IP = ipv4
-	}
+	a.IP = ua
 }
 
 // UDPAddr creates a new net.UDPAddr.
 func (a Address) UDPAddr() *net.UDPAddr {
-	return &net.UDPAddr{
-		IP:   a.IP,
-		Port: int(a.Port),
+	switch a.IP.(type) {
+	case *net.IPAddr:
+		return &net.UDPAddr{
+			IP:   a.IP.(*net.IPAddr).IP,
+			Port: int(a.Port),
+		}
+	case *net.UDPAddr:
+		return &net.UDPAddr{
+			IP:   a.IP.(*net.UDPAddr).IP,
+			Port: int(a.Port),
+		}
+	default:
+		return nil
+	}
+}
+
+func (a Address) IsIPv6() bool {
+	switch a.IP.(type) {
+	case *net.IPAddr:
+		return a.IP.(*net.IPAddr).IP.To4() == nil
+	case *net.UDPAddr:
+		return a.IP.(*net.UDPAddr).IP.To4() == nil
+	default:
+		return false
+	}
+}
+
+func (a Address) To4() *net.IPAddr {
+	switch a.IP.(type) {
+	case *net.IPAddr:
+		return &net.IPAddr{
+			IP: a.IP.(*net.IPAddr).IP.To4(),
+		}
+	case *net.UDPAddr:
+		return &net.IPAddr{
+			IP: a.IP.(*net.UDPAddr).IP.To4(),
+		}
+	default:
+		return &net.IPAddr{
+			IP: net.IP{127, 0, 0, 1},
+		}
+	}
+}
+
+func (a Address) To16() *net.IPAddr {
+	switch a.IP.(type) {
+	case *net.IPAddr:
+		return &net.IPAddr{
+			IP: a.IP.(*net.IPAddr).IP.To16(),
+		}
+	case *net.UDPAddr:
+		return &net.IPAddr{
+			IP: a.IP.(*net.UDPAddr).IP.To16(),
+		}
+	default:
+		return &net.IPAddr{
+			IP: net.IPv6loopback,
+		}
 	}
 }
 
@@ -139,18 +271,32 @@ func (a Address) String() string {
 // Equal reports whether n is equal to o, which is equal to
 //   n.HasIPAndPort(o.IP, o.Port)
 func (a Address) Equal(o Address) bool {
-	return a.Port == o.Port && a.IP.Equal(o.IP)
+	return a.Port == o.Port && a.IP.String() == o.IP.String()
 }
 
 // HasIPAndPort reports whether the current node has the ip and the port.
-func (a Address) HasIPAndPort(ip net.IP, port uint16) bool {
-	return port == a.Port && a.IP.Equal(ip)
+func (a Address) HasIPAndPort(ip net.Addr, port uint16) bool {
+	return port == a.Port && a.IP.String() == ip.String()
 }
 
 // WriteBinary is the same as MarshalBinary, but writes the result into w
 // instead of returning.
 func (a Address) WriteBinary(w io.Writer) (m int, err error) {
-	if m, err = w.Write(a.IP); err == nil {
+	var ip []byte
+	switch a.IP.(type) {
+	case *net.IPAddr:
+		ip = []byte(a.IP.(*net.IPAddr).IP)
+	case *net.UDPAddr:
+		ip = []byte(a.IP.(*net.UDPAddr).IP)
+	case i2pkeys.I2PAddr:
+		var err error
+		ip, err = a.IP.(i2pkeys.I2PAddr).ToBytes()
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	if m, err = w.Write(ip); err == nil {
 		if err = binary.Write(w, binary.BigEndian, a.Port); err == nil {
 			m += 2
 		}
@@ -161,15 +307,33 @@ func (a Address) WriteBinary(w io.Writer) (m int, err error) {
 // UnmarshalBinary implements the interface binary.BinaryUnmarshaler.
 func (a *Address) UnmarshalBinary(b []byte) (err error) {
 	_len := len(b) - 2
-	switch _len {
-	case net.IPv4len, net.IPv6len:
-	default:
-		return ErrInvalidAddr
+	i2p := false
+	if _len <= net.IPv6len {
+		switch _len {
+		case net.IPv4len, net.IPv6len:
+		default:
+			return ErrInvalidAddr
+		}
+	} else {
+		_len = len(b)
+		i2p = true
 	}
 
-	a.IP = make(net.IP, _len)
-	copy(a.IP, b[:_len])
-	a.Port = binary.BigEndian.Uint16(b[_len:])
+	IP := make([]byte, _len)
+	copy(IP, b[:_len])
+	if i2p {
+		a.IP, err = i2pkeys.NewI2PAddrFromBytes(IP)
+		if err != nil {
+			return err
+		}
+		a.Port = uint16(6881)
+	} else {
+		a.IP = &net.IPAddr{
+			IP: net.IP(IP),
+		}
+		a.Port = binary.BigEndian.Uint16(b[_len:])
+	}
+
 	return
 }
 
@@ -195,14 +359,27 @@ func (a *Address) decode(vs []interface{}) (err error) {
 	}()
 
 	host := vs[0].(string)
-	if a.IP = net.ParseIP(host); len(a.IP) == 0 {
-		return ErrInvalidAddr
-	} else if ip := a.IP.To4(); len(ip) != 0 {
-		a.IP = ip
+	if strings.HasSuffix(host, ".i2p") {
+		a.IP, err = i2pkeys.NewI2PAddrFromBytes([]byte(host))
+		if err != nil {
+			return
+		}
+		a.Port = uint16(6881)
+		return
+	} else {
+		a.IP = &net.IPAddr{
+			IP: net.ParseIP(host),
+		}
+		if len(a.IP.(*net.IPAddr).IP) == 0 {
+			return ErrInvalidAddr
+		} else if ip := a.IP.(*net.IPAddr).IP.To4(); len(ip) != 0 {
+			a.IP = &net.IPAddr{
+				IP: ip,
+			}
+		}
+		a.Port = uint16(vs[1].(int64))
+		return
 	}
-
-	a.Port = uint16(vs[1].(int64))
-	return
 }
 
 // UnmarshalBencode implements the interface bencode.Unmarshaler.
