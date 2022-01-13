@@ -43,7 +43,7 @@ const (
 )
 
 // CompactIP is used to handle the compact ipv4 or ipv6.
-type CompactIP net.Addr
+type CompactIP net.IP
 
 func (ci CompactIP) String() string {
 	return net.IP(ci).String()
