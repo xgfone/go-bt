@@ -1,0 +1,92 @@
+diff --git a/peerprotocol/extension.go b/peerprotocol/extension.go
+index 7ab53ff..02eb9e3 100644
+--- a/peerprotocol/extension.go
++++ b/peerprotocol/extension.go
+@@ -17,6 +17,7 @@ package peerprotocol
+ import (
+ 	"bytes"
+ 	"errors"
++	"log"
+ 	"net"
+ 
+ 	"github.com/xgfone/bt/bencode"
+@@ -43,39 +44,58 @@ const (
+ )
+ 
+ // CompactIP is used to handle the compact ipv4 or ipv6.
++//type CompactIPBytes []byte //net.IP
++
+ type CompactIP net.IP
+ 
++func NewCompactIP(b []byte) (CompactIP, error) {
++	if len(b) == net.IPv4len {
++		return CompactIP(b), nil
++	}
++	if len(b) == net.IPv6len {
++		return CompactIP(b), nil
++	}
++	return nil, errInvalidIP
++}
++
+ func (ci CompactIP) String() string {
+-	return net.IP(ci).String()
++	return string(ci) //net.IP(ci).String()
+ }
+ 
+ // MarshalBencode implements the interface bencode.Marshaler.
+-func (ci CompactIP) MarshalBencode() ([]byte, error) {
+-	ip := net.IP(ci)
+-	if ipv4 := ip.To4(); len(ipv4) != 0 {
+-		ip = ipv4
++func (ci *CompactIP) MarshalBencode() ([]byte, error) {
++	ip := *ci
++	log.Println("Marshal IP,", ip, ",", len(ip), ",", ip.String(), ",", net.IPv4len)
++	log.Println("Marshal IP,", ci, ",", ",", ci.String(), ",", net.IPv4len)
++	if len(ip) == net.IPv4len {
++		ip = ip
+ 	}
+ 	return bencode.EncodeBytes(ip[:])
+ }
+ 
+ // UnmarshalBencode implements the interface bencode.Unmarshaler.
+ func (ci *CompactIP) UnmarshalBencode(b []byte) (err error) {
+-	var ip net.IP
++	var ip []byte
+ 	if err = bencode.DecodeBytes(b, &ip); err != nil {
+ 		return
+ 	}
++	log.Println("Unmarshal IP,", ip, ",", len(ip), ",", string(ip), ",", net.IPv4len)
+ 
+ 	switch len(ip) {
+ 	case net.IPv4len, net.IPv6len:
+ 	default:
+-		return errInvalidIP
++		if len(ip) < net.IPv6len {
++			return errInvalidIP
++		}
+ 	}
+ 
+-	if ipv4 := ip.To4(); len(ipv4) != 0 {
+-		ip = ipv4
++	if len(ip) == net.IPv4len {
++		ip = []byte(ip)
+ 	}
++	//ip = ip
+ 
+ 	*ci = CompactIP(ip)
++	log.Println("Unmarshal IP,", ci, ",", ",", ci.String(), ",", net.IPv4len)
+ 	return
+ }
+ 
+@@ -90,8 +110,9 @@ type ExtendedHandshakeMsg struct {
+ 
+ 	// Port is the local client port, which is redundant and no need
+ 	// for the receiving side of the connection to send this.
+-	Port   uint16    `bencode:"p,omitempty"`      // BEP 10
+-	IPv6   net.IP    `bencode:"ipv6,omitempty"`   // BEP 10
++	Port uint16 `bencode:"p,omitempty"`    // BEP 10
++	IPv6 net.IP `bencode:"ipv6,omitempty"` // BEP 10
++	//IPv6   []byte    `bencode:"ipv6,omitempty"`   // BEP 10
+ 	IPv4   CompactIP `bencode:"ipv4,omitempty"`   // BEP 10
+ 	YourIP CompactIP `bencode:"yourip,omitempty"` // BEP 10
+ 

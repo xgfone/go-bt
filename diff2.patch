@@ -1,0 +1,127 @@
+diff --git a/peerprotocol/extension.go b/peerprotocol/extension.go
+index 7ab53ff..19b7799 100644
+--- a/peerprotocol/extension.go
++++ b/peerprotocol/extension.go
+@@ -16,9 +16,12 @@ package peerprotocol
+ 
+ import (
+ 	"bytes"
++	"crypto/sha256"
+ 	"errors"
++	"log"
+ 	"net"
+ 
++	"github.com/eyedeekay/sam3/i2pkeys"
+ 	"github.com/xgfone/bt/bencode"
+ )
+ 
+@@ -42,40 +45,83 @@ const (
+ 	UtMetadataExtendedMsgTypeReject  = 2 // BEP 9
+ )
+ 
++const (
++	I2Plen = 32
++)
++
+ // CompactIP is used to handle the compact ipv4 or ipv6.
+-type CompactIP net.IP
++type CompactIP []byte
++
++func NewCompactIP(addr []byte) CompactIP {
++	switch len(addr) {
++	case net.IPv4len:
++		return CompactIP(addr)
++	case net.IPv6len:
++		return CompactIP(addr)
++	case I2Plen:
++		b := sha256.Sum256(addr)
++		return CompactIP(b[:])
++	default:
++		return nil
++	}
++}
+ 
+ func (ci CompactIP) String() string {
+-	return net.IP(ci).String()
++	switch len(ci) {
++	case net.IPv4len:
++		return net.IP(ci).String()
++	case net.IPv6len:
++		if ip := net.IP(ci).To4(); len(ip) != 0 {
++			return ip.String()
++		}
++		return "[" + net.IP(ci).String() + "]"
++	case I2Plen:
++		return i2pkeys.I2PAddr(ci).String()
++	default:
++		return ""
++	}
+ }
+ 
+ // MarshalBencode implements the interface bencode.Marshaler.
+ func (ci CompactIP) MarshalBencode() ([]byte, error) {
+-	ip := net.IP(ci)
+-	if ipv4 := ip.To4(); len(ipv4) != 0 {
+-		ip = ipv4
++	switch len(ci) {
++	case net.IPv4len:
++		ip := net.IP(ci)
++		if ipv4 := ip.To4(); len(ipv4) != 0 {
++			ip = ipv4
++		}
++		return bencode.EncodeBytes(ip[:])
++	case net.IPv6len:
++		ip := net.IP(ci)
++		if ipv4 := ip.To4(); len(ipv4) != 0 {
++			ip = ipv4
++		}
++		return bencode.EncodeBytes(ip[:])
++	case I2Plen:
++		ip := i2pkeys.I2PAddr(ci)
++		return bencode.EncodeBytes(ip[:])
++	default:
++		return nil, errInvalidIP
+ 	}
+-	return bencode.EncodeBytes(ip[:])
++
+ }
+ 
+ // UnmarshalBencode implements the interface bencode.Unmarshaler.
+ func (ci *CompactIP) UnmarshalBencode(b []byte) (err error) {
++	//var ip []byte //net.IP
+ 	var ip net.IP
+ 	if err = bencode.DecodeBytes(b, &ip); err != nil {
+ 		return
+ 	}
++	log.Println("LOG", ip)
+ 
+ 	switch len(ip) {
+-	case net.IPv4len, net.IPv6len:
++	case net.IPv4len, net.IPv6len, I2Plen:
+ 	default:
+ 		return errInvalidIP
+ 	}
+ 
+-	if ipv4 := ip.To4(); len(ipv4) != 0 {
+-		ip = ipv4
+-	}
+-
+-	*ci = CompactIP(ip)
++	*ci = NewCompactIP(ip)
+ 	return
+ }
+ 
+diff --git a/peerprotocol/extension_test.go b/peerprotocol/extension_test.go
+index ffcbdfd..d47cd7e 100644
+--- a/peerprotocol/extension_test.go
++++ b/peerprotocol/extension_test.go
+@@ -29,7 +29,8 @@ func TestCompactIP(t *testing.T) {
+ 	var ip CompactIP
+ 	if err = ip.UnmarshalBencode(b); err != nil {
+ 		t.Error(err)
+-	} else if ip.String() != "1.2.3.4" {
++	} else if ip.String() != "123.2.3.4" {
++		t.Log("IP", ip.String(), "IP")
+ 		t.Error(ip)
+ 	}
+ }
