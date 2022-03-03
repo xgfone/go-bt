@@ -17,8 +17,10 @@ package peerprotocol
 import (
 	"bytes"
 	"errors"
+	"log"
 	"net"
 
+	"github.com/eyedeekay/sam3/i2pkeys"
 	"github.com/xgfone/bt/bencode"
 )
 
@@ -43,40 +45,82 @@ const (
 )
 
 // CompactIP is used to handle the compact ipv4 or ipv6.
-type CompactIP net.IP
+type CompactIP []byte
 
 func (ci CompactIP) String() string {
-	return net.IP(ci).String()
+	//return net.IP(ci).String()
+	switch len(ci) {
+	case net.IPv4len:
+		return net.IP(ci).String()
+	case net.IPv6len:
+		return net.IP(ci).String()
+	case 32:
+		return i2pkeys.I2PAddr(ci).DestHash().String()
+	}
+	log.Printf("CI String: %b, %d", ci, len(ci))
+	return ""
 }
 
 // MarshalBencode implements the interface bencode.Marshaler.
 func (ci CompactIP) MarshalBencode() ([]byte, error) {
-	ip := net.IP(ci)
-	if ipv4 := ip.To4(); len(ipv4) != 0 {
-		ip = ipv4
+	log.Println("Marshal Bytes:", ci, len(ci))
+	if len(ci) == net.IPv4len {
+		log.Println("Marshal IPv4 Bytes:", ci, len(ci))
+		ip := []byte(ci)
+		ic, err := bencode.EncodeBytes(ip[:])
+		if err != nil {
+			return nil, err
+		}
+		return ic, nil
 	}
-	return bencode.EncodeBytes(ip[:])
+	if len(ci) == net.IPv6len {
+		log.Println("Marshal IPv6 Bytes:", ci, len(ci))
+		ip := []byte(ci)
+		ic, err := bencode.EncodeBytes(ip[:])
+		if err != nil {
+			return nil, err
+		}
+		return ic, nil
+	}
+	if len(ci) == 32 {
+		log.Println("Marshal I2P Bytes:", ci, len(ci))
+		i2p := i2pkeys.I2PAddr(ci).DestHash()
+		return bencode.EncodeBytes(i2p[:])
+	}
+	return nil, errInvalidIP
 }
 
 // UnmarshalBencode implements the interface bencode.Unmarshaler.
 func (ci *CompactIP) UnmarshalBencode(b []byte) (err error) {
-	var ip net.IP
-	if err = bencode.DecodeBytes(b, &ip); err != nil {
-		return
+	log.Println("Unmarshal Bytes:", b, len(b))
+	if len(b) >= net.IPv4len && len(b) < net.IPv6len {
+		log.Println("Unmarshal IPv4 Bytes:", b, len(b))
+		ip := net.IP(b[len(b)-net.IPv4len:])
+		if ipv4 := ip.To4(); len(ipv4) != 0 {
+			ip = ipv4
+		}
+		*ci = CompactIP(ip[:])
+		log.Println("Unmarshal IPv4:", ip, len(ip))
+		return nil
 	}
-
-	switch len(ip) {
-	case net.IPv4len, net.IPv6len:
-	default:
-		return errInvalidIP
+	if len(b) >= net.IPv6len && len(b) < 32 {
+		log.Println("Unmarshal IPv6 Bytes:", b, len(b))
+		ip := net.IP(b[len(b)-net.IPv6len:])
+		if ipv6 := ip.To16(); len(ipv6) != 0 {
+			ip = ipv6
+		}
+		*ci = CompactIP(ip[:])
+		log.Println("Unmarshal IPv6:", ip, len(ip))
+		return nil
 	}
-
-	if ipv4 := ip.To4(); len(ipv4) != 0 {
-		ip = ipv4
+	if len(b) >= 32 {
+		log.Println("Unmarshal I2P Bytes:", b, len(b)-32)
+		i2p := i2pkeys.I2PAddr(b[len(b)-32:]).DestHash()
+		*ci = i2p[:]
+		log.Println("Unmarshal I2P:", i2p, len(i2p))
+		return nil
 	}
-
-	*ci = CompactIP(ip)
-	return
+	return errInvalidIP
 }
 
 // ExtendedHandshakeMsg represent the extended handshake message.
@@ -91,7 +135,7 @@ type ExtendedHandshakeMsg struct {
 	// Port is the local client port, which is redundant and no need
 	// for the receiving side of the connection to send this.
 	Port   uint16    `bencode:"p,omitempty"`      // BEP 10
-	IPv6   net.IP    `bencode:"ipv6,omitempty"`   // BEP 10
+	IPv6   []byte    `bencode:"ipv6,omitempty"`   // BEP 10
 	IPv4   CompactIP `bencode:"ipv4,omitempty"`   // BEP 10
 	YourIP CompactIP `bencode:"yourip,omitempty"` // BEP 10
 

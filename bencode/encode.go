@@ -5,6 +5,7 @@ import (
 	"encoding"
 	"fmt"
 	"io"
+	"log"
 	"reflect"
 	"sort"
 )
@@ -135,6 +136,7 @@ func encodeValue(w io.Writer, val reflect.Value) error {
 			if err == nil {
 				_, err = w.Write(byteSlice)
 			}
+			log.Println("byteSlice", byteSlice)
 
 			return err
 		}
@@ -210,7 +212,7 @@ func encodeValue(w io.Writer, val reflect.Value) error {
 		return err
 	}
 
-	return fmt.Errorf("Can't encode type: %s", v.Type())
+	return fmt.Errorf("can't encode type: %s", v.Type())
 }
 
 // indirectEncodeValue walks down v allocating pointers as needed,
