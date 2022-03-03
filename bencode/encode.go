@@ -5,7 +5,6 @@ import (
 	"encoding"
 	"fmt"
 	"io"
-	"log"
 	"reflect"
 	"sort"
 )
@@ -136,7 +135,6 @@ func encodeValue(w io.Writer, val reflect.Value) error {
 			if err == nil {
 				_, err = w.Write(byteSlice)
 			}
-			log.Println("byteSlice", byteSlice)
 
 			return err
 		}

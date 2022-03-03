@@ -55,7 +55,8 @@ func (ci CompactIP) String() string {
 	case net.IPv6len:
 		return net.IP(ci).String()
 	case 32:
-		return i2pkeys.I2PAddr(ci).DestHash().String()
+		i2p, _ := i2pkeys.DestHashFromBytes(ci)
+		return i2p.String()
 	}
 	log.Printf("CI String: %b, %d", ci, len(ci))
 	return ""
@@ -63,9 +64,7 @@ func (ci CompactIP) String() string {
 
 // MarshalBencode implements the interface bencode.Marshaler.
 func (ci CompactIP) MarshalBencode() ([]byte, error) {
-	log.Println("Marshal Bytes:", ci, len(ci))
 	if len(ci) == net.IPv4len {
-		log.Println("Marshal IPv4 Bytes:", ci, len(ci))
 		ip := []byte(ci)
 		ic, err := bencode.EncodeBytes(ip[:])
 		if err != nil {
@@ -74,7 +73,6 @@ func (ci CompactIP) MarshalBencode() ([]byte, error) {
 		return ic, nil
 	}
 	if len(ci) == net.IPv6len {
-		log.Println("Marshal IPv6 Bytes:", ci, len(ci))
 		ip := []byte(ci)
 		ic, err := bencode.EncodeBytes(ip[:])
 		if err != nil {
@@ -83,8 +81,10 @@ func (ci CompactIP) MarshalBencode() ([]byte, error) {
 		return ic, nil
 	}
 	if len(ci) == 32 {
-		log.Println("Marshal I2P Bytes:", ci, len(ci))
-		i2p := i2pkeys.I2PAddr(ci).DestHash()
+		i2p, err := i2pkeys.DestHashFromBytes(ci[:])
+		if err != nil {
+			return nil, err
+		}
 		return bencode.EncodeBytes(i2p[:])
 	}
 	return nil, errInvalidIP
@@ -92,32 +92,25 @@ func (ci CompactIP) MarshalBencode() ([]byte, error) {
 
 // UnmarshalBencode implements the interface bencode.Unmarshaler.
 func (ci *CompactIP) UnmarshalBencode(b []byte) (err error) {
-	log.Println("Unmarshal Bytes:", b, len(b))
 	if len(b) >= net.IPv4len && len(b) < net.IPv6len {
-		log.Println("Unmarshal IPv4 Bytes:", b, len(b))
 		ip := net.IP(b[len(b)-net.IPv4len:])
 		if ipv4 := ip.To4(); len(ipv4) != 0 {
 			ip = ipv4
 		}
 		*ci = CompactIP(ip[:])
-		log.Println("Unmarshal IPv4:", ip, len(ip))
 		return nil
 	}
 	if len(b) >= net.IPv6len && len(b) < 32 {
-		log.Println("Unmarshal IPv6 Bytes:", b, len(b))
 		ip := net.IP(b[len(b)-net.IPv6len:])
 		if ipv6 := ip.To16(); len(ipv6) != 0 {
 			ip = ipv6
 		}
 		*ci = CompactIP(ip[:])
-		log.Println("Unmarshal IPv6:", ip, len(ip))
 		return nil
 	}
 	if len(b) >= 32 {
-		log.Println("Unmarshal I2P Bytes:", b, len(b)-32)
-		i2p := i2pkeys.I2PAddr(b[len(b)-32:]).DestHash()
+		i2p, _ := i2pkeys.DestHashFromBytes(b[len(b)-32:])
 		*ci = i2p[:]
-		log.Println("Unmarshal I2P:", i2p, len(i2p))
 		return nil
 	}
 	return errInvalidIP

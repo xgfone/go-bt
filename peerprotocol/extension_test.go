@@ -66,20 +66,19 @@ func TestCompactI2P(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dh := i2pkeys.Address.Base32()
-	ipv4 := CompactIP([]byte(dh[:]))
-	b, err := ipv4.MarshalBencode()
+	dh := i2pkeys.Address.DestHash()
+	i2p := CompactIP(dh[:])
+	b, err := i2p.MarshalBencode()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	log.Println("I2P Test", ipv4.String(), dh))
+	log.Println("I2P Test", i2p.String(), len(b))
 
 	var ip CompactIP
 	if err = ip.UnmarshalBencode(b); err != nil {
 		t.Error(err)
-		//} else if ip.String() != dh.String() {
-	} else if len(ip.String()) == 32 {
+	} else if ip.String() != dh.String() {
 		t.Error(ip, dh)
 	}
 }
