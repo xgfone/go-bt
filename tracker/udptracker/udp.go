@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/eyedeekay/sam3/i2pkeys"
 	"github.com/xgfone/bt/metainfo"
 )
 
@@ -55,7 +56,7 @@ type AnnounceRequest struct {
 	Uploaded   int64
 	Event      uint32
 
-	IP      net.IP
+	IP      net.Addr
 	Key     int32
 	NumWant int32 // -1 for default
 	Port    uint16
@@ -64,7 +65,7 @@ type AnnounceRequest struct {
 }
 
 // DecodeFrom decodes the request from b.
-func (r *AnnounceRequest) DecodeFrom(b []byte, ipv4 bool) {
+func (r *AnnounceRequest) DecodeFrom(b []byte, w int) {
 	r.InfoHash = metainfo.NewHash(b[0:20])
 	r.PeerID = metainfo.NewHash(b[20:40])
 	r.Downloaded = int64(binary.BigEndian.Uint64(b[40:48]))
@@ -72,13 +73,20 @@ func (r *AnnounceRequest) DecodeFrom(b []byte, ipv4 bool) {
 	r.Uploaded = int64(binary.BigEndian.Uint64(b[56:64]))
 	r.Event = binary.BigEndian.Uint32(b[64:68])
 
-	if ipv4 {
-		r.IP = make(net.IP, net.IPv4len)
-		copy(r.IP, b[68:72])
+	if w == 1 {
+		ip := make(net.IP, net.IPv4len)
+		copy(ip, b[68:72])
+		r.IP = &net.IPAddr{IP: ip}
 		b = b[72:]
+	} else if w == 0 {
+		ip := make(net.IP, net.IPv6len)
+		copy(ip, b[68:84])
+		r.IP = &net.IPAddr{IP: ip}
+		b = b[84:]
 	} else {
-		r.IP = make(net.IP, net.IPv6len)
-		copy(r.IP, b[68:84])
+		ip := make(net.IP, 32)
+		copy(ip, b[68:100])
+		r.IP, _ = i2pkeys.DestHashFromBytes(ip)
 		b = b[84:]
 	}
 
@@ -106,10 +114,15 @@ func (r AnnounceRequest) EncodeTo(buf *bytes.Buffer) {
 	binary.Write(buf, binary.BigEndian, r.Uploaded)
 	binary.Write(buf, binary.BigEndian, r.Event)
 
-	if ip := r.IP.To4(); ip != nil {
-		buf.Write(ip[:])
+	if len(r.IP.String()) < 31 {
+		IP := net.ParseIP(r.IP.String())
+		if ip := IP.To4(); ip != nil {
+			buf.Write(ip[:])
+		} else {
+			buf.Write(IP[:])
+		}
 	} else {
-		buf.Write(r.IP[:])
+		buf.Write([]byte(r.IP.String()))
 	}
 
 	binary.Write(buf, binary.BigEndian, r.Key)

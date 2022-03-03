@@ -28,8 +28,8 @@ import (
 
 type testHandler struct{}
 
-func (testHandler) OnConnect(raddr *net.UDPAddr) (err error) { return }
-func (testHandler) OnAnnounce(raddr *net.UDPAddr, req udptracker.AnnounceRequest) (
+func (testHandler) OnConnect(raddr net.Addr) (err error) { return }
+func (testHandler) OnAnnounce(raddr net.Addr, req udptracker.AnnounceRequest) (
 	r udptracker.AnnounceResponse, err error) {
 	if req.Port != 80 {
 		err = errors.New("port is not 80")
@@ -55,7 +55,7 @@ func (testHandler) OnAnnounce(raddr *net.UDPAddr, req udptracker.AnnounceRequest
 	}
 	return
 }
-func (testHandler) OnScrap(raddr *net.UDPAddr, infohashes []metainfo.Hash) (
+func (testHandler) OnScrap(raddr net.Addr, infohashes []metainfo.Hash) (
 	rs []udptracker.ScrapeResponse, err error) {
 	rs = make([]udptracker.ScrapeResponse, len(infohashes))
 	for i := range infohashes {
@@ -89,7 +89,7 @@ func ExampleClient() {
 
 	// Send the ANNOUNCE request to the UDP tracker server,
 	// and get the ANNOUNCE response.
-	req := AnnounceRequest{IP: net.ParseIP("127.0.0.1"), Port: 80}
+	req := AnnounceRequest{IP: &net.IPAddr{IP: net.ParseIP("127.0.0.1")}, Port: 80}
 	resp, err := client.Announce(context.Background(), req)
 	if err != nil {
 		log.Fatal(err)

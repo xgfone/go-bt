@@ -63,7 +63,7 @@ func (pm *testPeerManager) GetPeers(infohash metainfo.Hash, maxnum int,
 	return
 }
 
-func onSearch(infohash string, ip net.IP, port uint16) {
+func onSearch(infohash string, ip net.Addr, port uint16) {
 	addr := net.JoinHostPort(ip.String(), strconv.FormatUint(uint64(port), 10))
 	fmt.Printf("%s is searching %s\n", addr, infohash)
 }

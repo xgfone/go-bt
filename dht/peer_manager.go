@@ -29,8 +29,9 @@ type PeerManager interface {
 }
 
 type peer struct {
-	ID    metainfo.Hash
-	IP    net.IP
+	ID metainfo.Hash
+	//	IP    net.IP
+	IP    net.Addr
 	Port  uint16
 	Token string
 	Time  time.Time
@@ -85,7 +86,7 @@ func (tpm *tokenPeerManager) Set(id metainfo.Hash, addr *net.UDPAddr, token stri
 	}
 	peers[addrkey] = peer{
 		ID:    id,
-		IP:    addr.IP,
+		IP:    addr,
 		Port:  uint16(addr.Port),
 		Token: token,
 		Time:  time.Now(),
@@ -122,16 +123,15 @@ func (tpm *tokenPeerManager) GetPeers(infohash metainfo.Hash, maxnum int,
 			if maxnum < 1 {
 				break
 			}
-
-			if ipv6 { // For IPv6
-				if isIPv6(peer.IP) {
-					maxnum--
-					addrs = append(addrs, metainfo.NewAddress(peer.IP, peer.Port))
-				}
-			} else if !isIPv6(peer.IP) { // For IPv4
-				maxnum--
-				addrs = append(addrs, metainfo.NewAddress(peer.IP, peer.Port))
-			}
+			//if ipv6 { // For IPv6
+			//if isIPv6(peer.IP) {
+			maxnum--
+			addrs = append(addrs, metainfo.NewAddress(peer.IP, peer.Port))
+			//}
+			//} else if !isIPv6(peer.IP) { // For IPv4
+			//	maxnum--
+			//	addrs = append(addrs, metainfo.NewAddress(peer.IP, peer.Port))
+			//}
 		}
 	}
 	tpm.lock.RUnlock()

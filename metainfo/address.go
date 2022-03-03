@@ -69,7 +69,7 @@ func Lookup(shost string, port int) ([]Address, error) {
 		}
 		if strings.HasSuffix(shost, ".i2p") {
 			returnAddresses := []Address{
-				Address{IP: iaddr, Port: 6881},
+				{IP: iaddr, Port: 6881},
 			}
 			return returnAddresses, nil
 		}

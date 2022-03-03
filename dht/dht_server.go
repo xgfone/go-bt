@@ -138,7 +138,7 @@ type Config struct {
 	// that's, the "get_peers" query.
 	//
 	// The default callback does noting.
-	OnSearch func(infohash string, ip net.IP, port uint16)
+	OnSearch func(infohash string, ip net.Addr, port uint16)
 
 	// OnTorrent is called when someone has the torrent infohash
 	// or someone has just downloaded the torrent infohash,
@@ -197,7 +197,7 @@ func (c *Config) set(conf ...Config) {
 		c.RespTimeout = time.Second * 10
 	}
 	if c.OnSearch == nil {
-		c.OnSearch = func(string, net.IP, uint16) {}
+		c.OnSearch = func(string, net.Addr, uint16) {}
 	}
 	if c.OnTorrent == nil {
 		c.OnTorrent = func(string, net.Addr, uint16) {}
@@ -530,7 +530,7 @@ func (s *Server) handleQuery(raddr *net.UDPAddr, m krpc.Message) {
 
 		r.Token = s.tokenManager.Token(raddr)
 		s.reply(raddr, m.T, r)
-		s.conf.OnSearch(m.A.InfoHash.HexString(), raddr.IP, uint16(raddr.Port))
+		s.conf.OnSearch(m.A.InfoHash.HexString(), &net.IPAddr{IP: raddr.IP}, uint16(raddr.Port))
 	case queryMethodAnnouncePeer:
 		if s.tokenManager.Check(raddr, m.A.Token) {
 			return
@@ -850,10 +850,7 @@ func (s *Server) onFindNodeResp(t *transaction, a *net.UDPAddr, m krpc.Message) 
 }
 
 func isIPv6(ip net.IP) bool {
-	if ip.To4() == nil {
-		return true
-	}
-	return false
+	return ip.To4() == nil
 }
 
 func ipIsZero(ip net.IP) bool {

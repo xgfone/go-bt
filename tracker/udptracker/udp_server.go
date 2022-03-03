@@ -30,9 +30,9 @@ import (
 // ServerHandler is used to handle the request from the client.
 type ServerHandler interface {
 	// OnConnect is used to check whether to make the connection or not.
-	OnConnect(raddr *net.UDPAddr) (err error)
-	OnAnnounce(raddr *net.UDPAddr, req AnnounceRequest) (AnnounceResponse, error)
-	OnScrap(raddr *net.UDPAddr, infohashes []metainfo.Hash) ([]ScrapeResponse, error)
+	OnConnect(raddr net.Addr) (err error)
+	OnAnnounce(raddr net.Addr, req AnnounceRequest) (AnnounceResponse, error)
+	OnScrap(raddr net.Addr, infohashes []metainfo.Hash) ([]ScrapeResponse, error)
 }
 
 func encodeResponseHeader(buf *bytes.Buffer, action, tid uint32) {
@@ -41,7 +41,7 @@ func encodeResponseHeader(buf *bytes.Buffer, action, tid uint32) {
 }
 
 type wrappedPeerAddr struct {
-	Addr *net.UDPAddr
+	Addr net.Addr
 	Time time.Time
 }
 
@@ -136,16 +136,16 @@ func (uts *Server) Run() {
 		} else if n < 16 {
 			continue
 		}
-		go uts.handleRequest(raddr.(*net.UDPAddr), buf, n)
+		go uts.handleRequest(raddr.(net.Addr), buf, n)
 	}
 }
 
-func (uts *Server) handleRequest(raddr *net.UDPAddr, buf []byte, n int) {
+func (uts *Server) handleRequest(raddr net.Addr, buf []byte, n int) {
 	defer uts.bufpool.Put(buf)
 	uts.handlePacket(raddr, buf[:n])
 }
 
-func (uts *Server) send(raddr *net.UDPAddr, b []byte) {
+func (uts *Server) send(raddr net.Addr, b []byte) {
 	n, err := uts.conn.WriteTo(b, raddr)
 	if err != nil {
 		uts.conf.ErrorLog("fail to send the udp tracker response to '%s': %s",
@@ -159,38 +159,38 @@ func (uts *Server) getConnectionID() uint64 {
 	return atomic.AddUint64(&uts.cid, 1)
 }
 
-func (uts *Server) addConnection(cid uint64, raddr *net.UDPAddr) {
+func (uts *Server) addConnection(cid uint64, raddr net.Addr) {
 	now := time.Now()
 	uts.lock.Lock()
 	uts.conns[cid] = wrappedPeerAddr{Addr: raddr, Time: now}
 	uts.lock.Unlock()
 }
 
-func (uts *Server) checkConnection(cid uint64, raddr *net.UDPAddr) (ok bool) {
+func (uts *Server) checkConnection(cid uint64, raddr net.Addr) (ok bool) {
 	uts.lock.RLock()
-	if w, _ok := uts.conns[cid]; _ok && w.Addr.Port == raddr.Port &&
-		bytes.Equal(w.Addr.IP, raddr.IP) {
+	if w, _ok := uts.conns[cid]; _ok &&
+		w.Addr.String() == raddr.String() {
 		ok = true
 	}
 	uts.lock.RUnlock()
 	return
 }
 
-func (uts *Server) sendError(raddr *net.UDPAddr, tid uint32, reason string) {
+func (uts *Server) sendError(raddr net.Addr, tid uint32, reason string) {
 	buf := bytes.NewBuffer(make([]byte, 0, 8+len(reason)))
 	encodeResponseHeader(buf, ActionError, tid)
 	buf.WriteString(reason)
 	uts.send(raddr, buf.Bytes())
 }
 
-func (uts *Server) sendConnResp(raddr *net.UDPAddr, tid uint32, cid uint64) {
+func (uts *Server) sendConnResp(raddr net.Addr, tid uint32, cid uint64) {
 	buf := bytes.NewBuffer(make([]byte, 0, 16))
 	encodeResponseHeader(buf, ActionConnect, tid)
 	binary.Write(buf, binary.BigEndian, cid)
 	uts.send(raddr, buf.Bytes())
 }
 
-func (uts *Server) sendAnnounceResp(raddr *net.UDPAddr, tid uint32,
+func (uts *Server) sendAnnounceResp(raddr net.Addr, tid uint32,
 	resp AnnounceResponse) {
 	buf := bytes.NewBuffer(make([]byte, 0, 8+12+len(resp.Addresses)*18))
 	encodeResponseHeader(buf, ActionAnnounce, tid)
@@ -198,7 +198,7 @@ func (uts *Server) sendAnnounceResp(raddr *net.UDPAddr, tid uint32,
 	uts.send(raddr, buf.Bytes())
 }
 
-func (uts *Server) sendScrapResp(raddr *net.UDPAddr, tid uint32,
+func (uts *Server) sendScrapResp(raddr net.Addr, tid uint32,
 	rs []ScrapeResponse) {
 	buf := bytes.NewBuffer(make([]byte, 0, 8+len(rs)*12))
 	encodeResponseHeader(buf, ActionScrape, tid)
@@ -208,7 +208,7 @@ func (uts *Server) sendScrapResp(raddr *net.UDPAddr, tid uint32,
 	uts.send(raddr, buf.Bytes())
 }
 
-func (uts *Server) handlePacket(raddr *net.UDPAddr, b []byte) {
+func (uts *Server) handlePacket(raddr net.Addr, b []byte) {
 	cid := binary.BigEndian.Uint64(b[:8])
 	action := binary.BigEndian.Uint32(b[8:12])
 	tid := binary.BigEndian.Uint32(b[12:16])
@@ -236,18 +236,24 @@ func (uts *Server) handlePacket(raddr *net.UDPAddr, b []byte) {
 	switch action {
 	case ActionAnnounce:
 		var req AnnounceRequest
-		if raddr.IP.To4() != nil { // For ipv4
+		if len(raddr.String()) < 16 { // For ipv4
 			if len(b) < 82 {
 				uts.sendError(raddr, tid, "invalid announce request")
 				return
 			}
-			req.DecodeFrom(b, true)
-		} else { // For ipv6
+			req.DecodeFrom(b, 1)
+		} else if len(raddr.String()) >= 16 && len(raddr.String()) < 32 { // for ipv6
 			if len(b) < 94 {
 				uts.sendError(raddr, tid, "invalid announce request")
 				return
 			}
-			req.DecodeFrom(b, false)
+			req.DecodeFrom(b, 0)
+		} else { // for cryptographic protocols
+			if len(b) < 110 {
+				uts.sendError(raddr, tid, "invalid announce request")
+				return
+			}
+			req.DecodeFrom(b, 0)
 		}
 
 		resp, err := uts.handler.OnAnnounce(raddr, req)
