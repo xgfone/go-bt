@@ -41,15 +41,15 @@ type Address struct {
 
 // NewAddress returns a new Address.
 func NewAddress(ip interface{}, port uint16) Address {
-	switch ip.(type) {
+	switch v := ip.(type) {
 	case net.IP:
 		return Address{IP: &net.IPAddr{
-			IP: ip.(net.IP),
+			IP: v,
 		}, Port: port}
 	case *net.IPAddr:
-		return Address{IP: ip.(*net.IPAddr), Port: port}
+		return Address{IP: v, Port: port}
 	case i2pkeys.I2PAddr:
-		return Address{IP: ip.(*i2pkeys.I2PAddr), Port: port}
+		return Address{IP: v, Port: port}
 	default:
 		return Address{IP: nil, Port: 0}
 	}
@@ -526,6 +526,22 @@ func (a HostAddress) MarshalBencode() (b []byte, err error) {
 	err = bencode.NewEncoder(buf).Encode([]interface{}{a.Host, a.Port})
 	if err == nil {
 		b = buf.Bytes()
+	}
+	return
+}
+
+func ConvertAddress(addr net.Addr) (a Address, err error) {
+	switch v := addr.(type) {
+	case *net.TCPAddr:
+		a = NewAddress(v, uint16(v.Port))
+	case *net.UDPAddr:
+		a = NewAddress(v, uint16(v.Port))
+	case *i2pkeys.I2PAddr:
+		a = NewAddress(v, 6881)
+	case i2pkeys.I2PAddr:
+		a = NewAddress(v, 6881)
+	default:
+		err = fmt.Errorf("unsupported address type: %T", addr)
 	}
 	return
 }
