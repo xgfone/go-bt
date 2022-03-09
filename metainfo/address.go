@@ -26,6 +26,7 @@ import (
 	"github.com/eyedeekay/sam3"
 	"github.com/eyedeekay/sam3/i2pkeys"
 	"github.com/xgfone/bt/bencode"
+	"github.com/xgfone/bt/utils"
 )
 
 // ErrInvalidAddr is returned when the compact address is invalid.
@@ -193,8 +194,8 @@ func (a *Address) FromString(addr string) (err error) {
 }
 
 // FromUDPAddr sets the ip from net.UDPAddr.
-func (a *Address) FromUDPAddr(ua *net.UDPAddr) {
-	a.Port = uint16(ua.Port)
+func (a *Address) FromUDPAddr(ua net.Addr) {
+	a.Port = uint16(utils.Port(ua))
 	a.IP = ua
 }
 
