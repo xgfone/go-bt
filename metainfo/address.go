@@ -23,15 +23,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/eyedeekay/sam3"
-	"github.com/eyedeekay/sam3/i2pkeys"
+	"github.com/eyedeekay/i2pkeys"
 	"github.com/xgfone/bt/bencode"
 	"github.com/xgfone/bt/utils"
 )
 
 // ErrInvalidAddr is returned when the compact address is invalid.
 var ErrInvalidAddr = fmt.Errorf("invalid compact information of ip and port")
-var SAMSession *sam3.SAM
 
 // Address represents a client/server listening on a UDP port implementing
 // the DHT protocol.
@@ -63,17 +61,15 @@ func NewAddressFromString(s string) (addr Address, err error) {
 }
 
 func Lookup(shost string, port int) ([]Address, error) {
-	if SAMSession != nil {
-		iaddr, err := SAMSession.Lookup(shost)
+	if strings.HasSuffix(shost, ".i2p") {
+		iaddr, err := i2pkeys.Lookup(shost)
 		if err != nil {
 			return nil, err
 		}
-		if strings.HasSuffix(shost, ".i2p") {
-			returnAddresses := []Address{
-				{IP: iaddr, Port: 6881},
-			}
-			return returnAddresses, nil
+		returnAddresses := []Address{
+			{IP: iaddr, Port: 6881},
 		}
+		return returnAddresses, nil
 	}
 	ips, err := net.LookupIP(shost)
 	if err != nil {
@@ -130,17 +126,15 @@ func NewAddressesFromString(s string) (addrs []Address, err error) {
 }
 
 func LookupNetAddr(shost string) ([]net.Addr, error) {
-	if SAMSession != nil {
-		iaddr, err := SAMSession.Lookup(shost)
+	if strings.HasSuffix(shost, ".i2p") {
+		iaddr, err := i2pkeys.Lookup(shost)
 		if err != nil {
 			return nil, err
 		}
-		if strings.HasSuffix(shost, ".i2p") {
-			returnAddresses := []net.Addr{
-				iaddr,
-			}
-			return returnAddresses, nil
+		returnAddresses := []net.Addr{
+			iaddr,
 		}
+		return returnAddresses, nil
 	}
 	ips, err := net.LookupIP(shost)
 	if err != nil {
@@ -199,8 +193,8 @@ func (a *Address) FromUDPAddr(ua net.Addr) {
 	a.IP = ua
 }
 
-// UDPAddr creates a new net.UDPAddr.
-func (a Address) UDPAddr() *net.UDPAddr {
+// Addr creates a new net.Addr.
+func (a Address) Addr() net.Addr {
 	switch a.IP.(type) {
 	case *net.IPAddr:
 		return &net.UDPAddr{
@@ -212,6 +206,12 @@ func (a Address) UDPAddr() *net.UDPAddr {
 			IP:   a.IP.(*net.UDPAddr).IP,
 			Port: int(a.Port),
 		}
+	case *i2pkeys.I2PAddr:
+		retvalue := a.IP.(*i2pkeys.I2PAddr)
+		return retvalue
+	case i2pkeys.I2PAddr:
+		retvalue := a.IP.(i2pkeys.I2PAddr)
+		return &retvalue
 	default:
 		return nil
 	}

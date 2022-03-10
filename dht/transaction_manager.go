@@ -29,7 +29,7 @@ type transaction struct {
 	ID    string
 	Query string
 	Arg   krpc.QueryArg
-	Addr  *net.UDPAddr
+	Addr  net.Addr
 	Time  time.Time
 	Depth int
 
@@ -37,7 +37,7 @@ type transaction struct {
 	Callback   func(Result)
 	OnError    func(t *transaction, code int, reason string)
 	OnTimeout  func(t *transaction)
-	OnResponse func(t *transaction, radd *net.UDPAddr, msg krpc.Message)
+	OnResponse func(t *transaction, radd net.Addr, msg krpc.Message)
 }
 
 func (t *transaction) Done(r Result) {
@@ -47,8 +47,8 @@ func (t *transaction) Done(r Result) {
 	}
 }
 
-func noopResponse(*transaction, *net.UDPAddr, krpc.Message) {}
-func newTransaction(s *Server, a *net.UDPAddr, q string, qa krpc.QueryArg,
+func noopResponse(*transaction, net.Addr, krpc.Message) {}
+func newTransaction(s *Server, a net.Addr, q string, qa krpc.QueryArg,
 	callback ...func(Result)) *transaction {
 	var cb func(Result)
 	if len(callback) > 0 {
@@ -141,7 +141,7 @@ func (tm *transactionManager) DeleteTransaction(t *transaction) {
 // and the peer address.
 //
 // Return nil if there is no the transaction.
-func (tm *transactionManager) PopTransaction(tid string, addr *net.UDPAddr) (t *transaction) {
+func (tm *transactionManager) PopTransaction(tid string, addr net.Addr) (t *transaction) {
 	key := transactionkey{id: tid, addr: addr.String()}
 	tm.lock.Lock()
 	if t = tm.trans[key]; t != nil {

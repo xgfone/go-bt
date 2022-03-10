@@ -17,7 +17,6 @@ package dht
 import (
 	"fmt"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 
@@ -63,14 +62,14 @@ func (pm *testPeerManager) GetPeers(infohash metainfo.Hash, maxnum int,
 	return
 }
 
-func onSearch(infohash string, ip net.Addr, port uint16) {
-	addr := net.JoinHostPort(ip.String(), strconv.FormatUint(uint64(port), 10))
-	fmt.Printf("%s is searching %s\n", addr, infohash)
+func onSearch(infohash string, ip net.Addr) {
+	//addr := net.JoinHostPort(ip.String(), strconv.FormatUint(uint64(port), 10))
+	fmt.Printf("%s is searching %s\n", ip.String(), infohash)
 }
 
-func onTorrent(infohash string, ip net.Addr, port uint16) {
-	addr := net.JoinHostPort(ip.String(), strconv.FormatUint(uint64(port), 10))
-	fmt.Printf("%s has downloaded %s\n", addr, infohash)
+func onTorrent(infohash string, ip net.Addr) {
+	//addr := net.JoinHostPort(ip.String(), strconv.FormatUint(uint64(port), 10))
+	fmt.Printf("%s has downloaded %s\n", ip.String(), infohash)
 }
 
 func newDHTServer(id metainfo.Hash, addr string, pm PeerManager) (s *Server, err error) {
@@ -178,5 +177,5 @@ func ExampleServer() {
 	// 127.0.0.1:9002 is searching 0102030405060708090a0b0c0d0e0f1011121314
 	// no peers for 0102030405060708090a0b0c0d0e0f1011121314
 	// 0102030405060708090a0b0c0d0e0f1011121314: 127.0.0.1:9001
-	// 127.0.0.1:9001 has downloaded 0102030405060708090a0b0c0d0e0f1011121314
+	// 127.0.0.1 has downloaded 0102030405060708090a0b0c0d0e0f1011121314
 }

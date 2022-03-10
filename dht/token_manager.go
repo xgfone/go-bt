@@ -83,7 +83,7 @@ func (tm *tokenManager) Stop() {
 }
 
 // Token allocates a token for a node addr and returns the token.
-func (tm *tokenManager) Token(addr *net.UDPAddr) (token string) {
+func (tm *tokenManager) Token(addr net.Addr) (token string) {
 	addrs := addr.String()
 	tm.lock.RLock()
 	token = tm.new
@@ -94,7 +94,7 @@ func (tm *tokenManager) Token(addr *net.UDPAddr) (token string) {
 
 // Check checks whether the token associated with the node addr is valid,
 // that's, it's not expired.
-func (tm *tokenManager) Check(addr *net.UDPAddr, token string) (ok bool) {
+func (tm *tokenManager) Check(addr net.Addr, token string) (ok bool) {
 	tm.lock.RLock()
 	last, new := tm.last, tm.new
 	tm.lock.RUnlock()

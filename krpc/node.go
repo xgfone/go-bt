@@ -35,7 +35,7 @@ func NewNode(id metainfo.Hash, ip net.IP, port int) Node {
 }
 
 // NewNodeByUDPAddr returns a new Node with the id and the UDP address.
-func NewNodeByUDPAddr(id metainfo.Hash, addr *net.UDPAddr) (n Node) {
+func NewNodeByUDPAddr(id metainfo.Hash, addr net.Addr) (n Node) {
 	n.ID = id
 	n.Addr.FromUDPAddr(addr)
 	return

@@ -17,7 +17,28 @@ package utils
 import (
 	"net"
 	"strconv"
+
+	"github.com/eyedeekay/sam3/i2pkeys"
 )
+
+func NetIPAddr(a net.Addr) net.IP {
+	switch a := a.(type) {
+	case *net.TCPAddr:
+		return a.IP
+	case *net.UDPAddr:
+		return a.IP
+	case *i2pkeys.I2PAddr:
+		return net.ParseIP("127.0.0.1")
+	case i2pkeys.I2PAddr:
+		return net.ParseIP("127.0.0.1")
+	default:
+		ip, _, err := net.SplitHostPort(a.String())
+		if err != nil {
+			return nil
+		}
+		return net.ParseIP(ip)
+	}
+}
 
 func IPAddr(a net.Addr) string {
 	switch a := a.(type) {
@@ -25,6 +46,10 @@ func IPAddr(a net.Addr) string {
 		return a.IP.String()
 	case *net.UDPAddr:
 		return a.IP.String()
+	case *i2pkeys.I2PAddr:
+		return a.DestHash().Hash()
+	case i2pkeys.I2PAddr:
+		return a.DestHash().Hash()
 	default:
 		ip, _, err := net.SplitHostPort(a.String())
 		if err != nil {
@@ -40,6 +65,10 @@ func Port(a net.Addr) int {
 		return a.Port
 	case *net.UDPAddr:
 		return a.Port
+	case *i2pkeys.I2PAddr:
+		return 6881
+	case i2pkeys.I2PAddr:
+		return 6881
 	default:
 		_, port, err := net.SplitHostPort(a.String())
 		if err != nil {
@@ -51,4 +80,26 @@ func Port(a net.Addr) int {
 		}
 		return iport
 	}
+}
+
+func IsIPv6Addr(addr net.Addr) bool {
+	switch xaddr := addr.(type) {
+	case *net.UDPAddr:
+		return xaddr.IP.To4() == nil
+	case *net.TCPAddr:
+		return xaddr.IP.To4() == nil
+	case *net.IPAddr:
+		return xaddr.IP.To4() == nil
+	default:
+		return false
+	}
+}
+
+func IpIsZero(ip net.IP) bool {
+	for _, b := range ip {
+		if b != 0 {
+			return false
+		}
+	}
+	return true
 }

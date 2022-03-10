@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/bt/utils"
 )
 
 // PeerManager is used to manage the peers.
@@ -76,7 +77,7 @@ func (tpm *tokenPeerManager) Start(interval time.Duration) {
 	}
 }
 
-func (tpm *tokenPeerManager) Set(id metainfo.Hash, addr *net.UDPAddr, token string) {
+func (tpm *tokenPeerManager) Set(id metainfo.Hash, addr net.Addr, token string) {
 	addrkey := addr.String()
 	tpm.lock.Lock()
 	peers, ok := tpm.peers[id]
@@ -87,14 +88,14 @@ func (tpm *tokenPeerManager) Set(id metainfo.Hash, addr *net.UDPAddr, token stri
 	peers[addrkey] = peer{
 		ID:    id,
 		IP:    addr,
-		Port:  uint16(addr.Port),
+		Port:  uint16(utils.Port(addr)),
 		Token: token,
 		Time:  time.Now(),
 	}
 	tpm.lock.Unlock()
 }
 
-func (tpm *tokenPeerManager) Get(id metainfo.Hash, addr *net.UDPAddr) (token string) {
+func (tpm *tokenPeerManager) Get(id metainfo.Hash, addr net.Addr) (token string) {
 	addrkey := addr.String()
 	tpm.lock.RLock()
 	if peers, ok := tpm.peers[id]; ok {

@@ -314,7 +314,7 @@ func (b *bucket) CheckAllNodes(now time.Time) {
 		case nodeStatusGood:
 		case nodeStatusDubious:
 			// Try to send the PING query to the dubious node to check whether it is alive.
-			if err := b.table.s.Ping(node.Node.Addr.UDPAddr()); err != nil {
+			if err := b.table.s.Ping(node.Node.Addr.Addr()); err != nil {
 				b.table.s.conf.ErrorLog("fail to ping '%s': %s", node.Node.String(), err)
 			}
 		case nodeStatusBad:
