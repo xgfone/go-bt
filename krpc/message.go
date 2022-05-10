@@ -179,7 +179,7 @@ func (e Error) MarshalBencode() (ret []byte, err error) {
 	buf := bytes.NewBuffer(nil)
 	buf.Grow(32)
 	err = bencode.NewEncoder(buf).Encode([]interface{}{e.Code, e.Reason})
-	if err != nil {
+	if err == nil {
 		ret = buf.Bytes()
 	}
 	return
