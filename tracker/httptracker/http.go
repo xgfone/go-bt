@@ -21,6 +21,7 @@ package httptracker
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -267,6 +268,7 @@ func (sr ScrapeResponse) EncodeTo(w io.Writer) (err error) {
 
 // Client represents a tracker client based on HTTP/HTTPS.
 type Client struct {
+	Client      *http.Client
 	ID          metainfo.Hash
 	AnnounceURL string
 	ScrapeURL   string
@@ -289,22 +291,38 @@ func (t *Client) Close() error   { return nil }
 func (t *Client) String() string { return t.AnnounceURL }
 
 func (t *Client) send(c context.Context, u string, vs url.Values, r interface{}) (err error) {
-	sym := "?"
-	if strings.IndexByte(u, '?') > 0 {
-		sym = "&"
+	var url string
+	if strings.IndexByte(u, '?') < 0 {
+		url = fmt.Sprintf("%s?%s", u, vs.Encode())
+	} else {
+		url = fmt.Sprintf("%s&%s", u, vs.Encode())
 	}
 
-	resp, err := http.Get(u + sym + vs.Encode())
+	req, err := NewRequestWithContext(c, http.MethodGet, url, nil)
 	if err != nil {
 		return
 	}
-	defer resp.Body.Close()
+
+	var resp *http.Response
+	if t.Client == nil {
+		resp, err = http.DefaultClient.Do(req)
+	} else {
+		resp, err = t.Client.Do(req)
+	}
+
+	if resp.Body != nil {
+		defer resp.Body.Close()
+	}
+
+	if err != nil {
+		return
+	}
+
 	return bencode.NewDecoder(resp.Body).Decode(r)
 }
 
 // Announce sends a Announce request to the tracker.
-func (t *Client) Announce(c context.Context, req AnnounceRequest) (
-	resp AnnounceResponse, err error) {
+func (t *Client) Announce(c context.Context, req AnnounceRequest) (resp AnnounceResponse, err error) {
 	if req.PeerID.IsZero() {
 		if t.ID.IsZero() {
 			req.PeerID = metainfo.NewRandomHash()
@@ -318,12 +336,12 @@ func (t *Client) Announce(c context.Context, req AnnounceRequest) (
 }
 
 // Scrape sends a Scrape request to the tracker.
-func (t *Client) Scrape(c context.Context, infohashes []metainfo.Hash) (
-	resp ScrapeResponse, err error) {
+func (t *Client) Scrape(c context.Context, infohashes []metainfo.Hash) (resp ScrapeResponse, err error) {
 	hs := make([]string, len(infohashes))
 	for i, h := range infohashes {
 		hs[i] = h.BytesString()
 	}
+
 	err = t.send(c, t.ScrapeURL, url.Values{"info_hash": hs}, &resp)
 	return
 }
