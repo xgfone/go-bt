@@ -299,6 +299,14 @@ func (s *Server) Bootstrap(addrs []string) {
 			}
 
 			for _, a := range as {
+				if isIPv6(a.IP) {
+					if !s.ipv6 {
+						continue
+					}
+				} else if !s.ipv4 {
+					continue
+				}
+
 				if err = s.FindNode(a.UDPAddr(), s.conf.ID); err != nil {
 					s.conf.ErrorLog(`fail to bootstrap '%s': %s`, a.String(), err)
 				}
