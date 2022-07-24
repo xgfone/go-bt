@@ -644,10 +644,12 @@ func (s *Server) onGetPeersResp(t *transaction, a *net.UDPAddr, m krpc.Message) 
 		return
 	}
 
+	// Terminate the transaction.
+	t.Done(Result{})
+
 	// Search the torrent infohash recursively.
 	t.Depth--
 	if t.Depth < 1 {
-		t.Done(Result{})
 		return
 	}
 
@@ -680,7 +682,6 @@ func (s *Server) onGetPeersResp(t *transaction, a *net.UDPAddr, m krpc.Message) 
 	}
 
 	if found || len(nodes) == 0 {
-		t.Done(Result{})
 		return
 	}
 
@@ -802,6 +803,8 @@ func (s *Server) findNode(target metainfo.Hash, addr *net.UDPAddr, depth int,
 }
 
 func (s *Server) onFindNodeResp(t *transaction, a *net.UDPAddr, m krpc.Message) {
+	t.Done(Result{})
+
 	// Search the target node recursively.
 	t.Depth--
 	if t.Depth < 1 {
