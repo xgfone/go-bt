@@ -72,22 +72,19 @@ func getPeersFromTrackers(id, infohash metainfo.Hash, trackers []string) (peers 
 	c, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	defer cancel()
 
+	result := make(map[string]int)
 	resp := tracker.GetPeers(c, id, infohash, trackers)
-	for r := range resp {
+	for _, r := range resp {
 		for _, addr := range r.Resp.Addresses {
-			addrs := addr.String()
-			nonexist := true
-			for _, peer := range peers {
-				if peer == addrs {
-					nonexist = false
-					break
-				}
-			}
-
-			if nonexist {
-				peers = append(peers, addrs)
-			}
+			result[addr.String()]++
 		}
+	}
+
+	peers = make([]string, len(result))
+	i := 0
+	for key, _ := range result {
+		peers[i] = key
+		i++
 	}
 
 	return
