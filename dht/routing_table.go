@@ -332,10 +332,6 @@ func (b *bucket) CheckAllNodes(now time.Time) {
 }
 
 func bucketid(ownerid, nid metainfo.Hash) int {
-	if ownerid == nid {
-		return 0
-	}
-
 	var i int
 	var bite byte
 	var bitDiff int
@@ -371,7 +367,7 @@ func bucketid(ownerid, nid metainfo.Hash) int {
 	}
 
 calc:
-	return i*8 + (8 - bitDiff)
+	return i*8 + (7 - bitDiff)
 }
 
 /// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
