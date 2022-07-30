@@ -34,7 +34,7 @@ var ErrInvalidAddr = fmt.Errorf("invalid compact information of ip and port")
 // Address represents a client/server listening on a UDP port implementing
 // the DHT protocol.
 type Address struct {
-	IP   net.Addr // For IPv4, its length must be 4.
+	IP   net.Addr
 	Port uint16
 }
 
