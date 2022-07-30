@@ -622,8 +622,16 @@ func (s *Server) onError(t *transaction, code int, reason string) {
 func (s *Server) onTimeout(t *transaction) {
 	// TODO: Should we use a task pool??
 	t.Done(Result{Timeout: true})
-	s.conf.ErrorLog("transaction '%s' timeout: query=%s, raddr=%s",
-		t.ID, t.Query, t.Addr.String())
+
+	var qid string
+	switch t.Query {
+	case "find_node":
+		qid = t.Arg.Target.String()
+	case "get_peers", "announce_peer":
+		qid = t.Arg.InfoHash.String()
+	}
+	s.conf.ErrorLog("transaction '%s' timeout: sid=%s, q=%s, qid=%s, laddr=%s, raddr=%s",
+		t.ID, s.conf.ID, t.Query, qid, s.conn.LocalAddr(), t.Addr.String())
 }
 
 func (s *Server) onPingResp(t *transaction, a net.Addr, m krpc.Message) {
@@ -645,10 +653,12 @@ func (s *Server) onGetPeersResp(t *transaction, a net.Addr, m krpc.Message) {
 		return
 	}
 
+	// Terminate the transaction.
+	t.Done(Result{})
+
 	// Search the torrent infohash recursively.
 	t.Depth--
 	if t.Depth < 1 {
-		t.Done(Result{})
 		return
 	}
 
@@ -681,7 +691,6 @@ func (s *Server) onGetPeersResp(t *transaction, a net.Addr, m krpc.Message) {
 	}
 
 	if found || len(nodes) == 0 {
-		t.Done(Result{})
 		return
 	}
 

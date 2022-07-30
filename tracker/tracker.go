@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 
 	"github.com/xgfone/bt/metainfo"
@@ -196,27 +197,33 @@ type Client interface {
 
 // ClientConfig is used to configure the defalut client implementation.
 type ClientConfig struct {
-	ID metainfo.Hash // The ID of the local client peer.
+	// The ID of the local client peer.
+	ID metainfo.Hash
+
+	// The http client used only the tracker client is based on HTTP.
+	HTTPClient *http.Client
 }
 
 // NewClient returns a new Client.
 func NewClient(connURL string, conf ...ClientConfig) (c Client, err error) {
-	var id metainfo.Hash
+	var config ClientConfig
 	if len(conf) > 0 {
-		id = conf[0].ID
+		config = conf[0]
 	}
 
 	u, err := url.Parse(connURL)
 	if err == nil {
 		switch u.Scheme {
 		case "http", "https":
-			c = &tclient{url: connURL, http: httptracker.NewClient(connURL, "")}
-			if !id.IsZero() {
-				c.(*tclient).http.ID = id
+			tracker := httptracker.NewClient(connURL, "")
+			if !config.ID.IsZero() {
+				tracker.ID = config.ID
 			}
+			c = &tclient{url: connURL, http: tracker}
+
 		case "udp", "udp4", "udp6":
 			var utc *udptracker.Client
-			config := udptracker.ClientConfig{ID: id}
+			config := udptracker.ClientConfig{ID: config.ID}
 			utc, err = udptracker.NewClientByDial(u.Scheme, u.Host, config)
 			if err == nil {
 				var e []udptracker.Extension

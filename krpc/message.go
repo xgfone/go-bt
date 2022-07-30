@@ -42,10 +42,10 @@ const (
 // as specified by the KRPC protocol, which are also referred to as the KRPC
 // messages.
 //
-// There are three types of messages: QUERY, RESPONSE, ERROR
-// The message is a dictonary that is then "bencoded"
-// (serialization & compression format adopted by the BitTorrent)
-// and sent via the UDP connection to peers.
+// The message is a dictonary that is "bencoded" (serialization & compression
+// format adopted by the BitTorrent) and sent via the UDP connection to peers.
+//
+// There are three types of messages: QUERY, RESPONSE, ERROR.
 //
 // A KRPC message is a single dictionary with two keys common to every message
 // and additional keys depending on the type of message. Every message has a key
@@ -58,12 +58,24 @@ const (
 // the type of message. The value of the "y" key is one of "q" for query,
 // "r" for response, or "e" for error.
 type Message struct {
-	T string         `bencode:"t"`           // required: transaction ID
-	Y string         `bencode:"y"`           // required: type of the message: q for QUERY, r for RESPONSE, e for ERROR
-	Q string         `bencode:"q,omitempty"` // Query method (one of 4: "ping", "find_node", "get_peers", "announce_peer")
-	A QueryArg       `bencode:"a,omitempty"` // named arguments sent with a query
-	R ResponseResult `bencode:"r,omitempty"` // RESPONSE type only
-	E Error          `bencode:"e,omitempty"` // ERROR type only
+	// Transaction ID
+	//
+	// Required
+	T string `bencode:"t"` // BEP 5
+
+	// Message Type: "q" for QUERY, "r" for RESPONSE, "e" for ERROR
+	//
+	// Required
+	Y string `bencode:"y"` // BEP 5
+
+	// Query Method: one of "ping", "find_node", "get_peers", "announce_peer"
+	//
+	// Required only if "y" is equal to "q".
+	Q string `bencode:"q,omitempty"` // BEP 5
+
+	A QueryArg       `bencode:"a,omitempty"` // BEP 5: Only for the QUERY message
+	R ResponseResult `bencode:"r,omitempty"` // BEP 5: Only for the RESPONSE message
+	E Error          `bencode:"e,omitempty"` // BEP 5: Only for the ERROR message
 
 	RO bool `bencode:"ro,omitempty"` // BEP 43: ReadOnly
 }
@@ -83,34 +95,24 @@ func NewErrorMsg(tid string, code int, reason string) Message {
 	return Message{T: tid, Y: "e", E: Error{Code: code, Reason: reason}}
 }
 
-// IsQuery reports whether the message is an QUERY.
-func (m Message) IsQuery() bool {
-	return m.Y == "q"
-}
+// IsQuery reports whether the message is a QUERY message.
+func (m Message) IsQuery() bool { return m.Y == "q" }
 
-// IsResponse reports whether the message is an RESPONSE.
-func (m Message) IsResponse() bool {
-	return m.Y == "r"
-}
+// IsResponse reports whether the message is a RESPONSE message.
+func (m Message) IsResponse() bool { return m.Y == "r" }
 
-// IsError reports whether the message is an ERROR.
-func (m Message) IsError() bool {
-	return m.Y == "e"
-}
+// IsError reports whether the message is an ERROR message.
+func (m Message) IsError() bool { return m.Y == "e" }
 
 // RID returns the value named "id" in "r".
 //
 // Return the ZERO value instead if no "id".
-func (m Message) RID() metainfo.Hash {
-	return m.R.ID
-}
+func (m Message) RID() metainfo.Hash { return m.R.ID }
 
 // QID returns the value named "id" in "a", that's, the query arguments.
 //
 // Return the ZERO value instead if no "id".
-func (m Message) QID() metainfo.Hash {
-	return m.A.ID
-}
+func (m Message) QID() metainfo.Hash { return m.A.ID }
 
 // ID returns the QID or RID.
 //
@@ -128,8 +130,8 @@ func (m Message) ID() metainfo.Hash {
 
 // Error represents a response error.
 type Error struct {
-	Code   int
-	Reason string
+	Code   int    // BEP 5
+	Reason string // BEP 5
 }
 
 // NewError returns a new Error.
@@ -140,7 +142,7 @@ func NewError(code int, reason string) Error {
 func (e *Error) decode(vs []interface{}) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("unpacking %#v: %v", vs, r)
+			err = fmt.Errorf("panic: %v", r)
 		}
 	}()
 
@@ -177,7 +179,7 @@ func (e Error) MarshalBencode() (ret []byte, err error) {
 	buf := bytes.NewBuffer(nil)
 	buf.Grow(32)
 	err = bencode.NewEncoder(buf).Encode([]interface{}{e.Code, e.Reason})
-	if err != nil {
+	if err == nil {
 		ret = buf.Bytes()
 	}
 	return
