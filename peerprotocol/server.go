@@ -65,6 +65,8 @@ type Config struct {
 	HandleMessage func(pc *PeerConn, msg Message, handler Handler) error
 }
 
+var Listen = net.Listen
+
 func (c *Config) set(conf ...Config) {
 	if len(conf) > 0 {
 		*c = conf[0]
@@ -95,7 +97,7 @@ type Server struct {
 // NewServerByListen returns a new Server by listening on the address.
 func NewServerByListen(network, address string, id metainfo.Hash, h Handler,
 	c ...Config) (*Server, error) {
-	ln, err := net.Listen(network, address)
+	ln, err := Listen(network, address)
 	if err != nil {
 		return nil, err
 	}

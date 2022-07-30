@@ -36,6 +36,9 @@ var (
 	ErrNoExtHandshake     = fmt.Errorf("no extended handshake")
 )
 
+var DialTimeout = net.DialTimeout
+var Dial = net.Dial
+
 // Bep3Handler is used to handle the BEP 3 type message if Handler has also
 // implemented the interface.
 type Bep3Handler interface {
@@ -169,7 +172,7 @@ func NewPeerConn(conn net.Conn, id, infohash metainfo.Hash) *PeerConn {
 
 // NewPeerConnByDial returns a new PeerConn by dialing to addr with the "tcp" network.
 func NewPeerConnByDial(addr string, id, infohash metainfo.Hash, timeout time.Duration) (pc *PeerConn, err error) {
-	conn, err := net.DialTimeout("tcp", addr, timeout)
+	conn, err := DialTimeout("tcp", addr, timeout)
 	if err == nil {
 		pc = NewPeerConn(conn, id, infohash)
 	}

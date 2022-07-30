@@ -28,18 +28,20 @@ import (
 	"github.com/xgfone/bt/metainfo"
 )
 
+var Dial = net.Dial
+
 // NewClientByDial returns a new Client by dialing.
 func NewClientByDial(network, address string, c ...ClientConfig) (*Client, error) {
-	conn, err := net.Dial(network, address)
+	conn, err := Dial(network, address)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewClient(conn.(*net.UDPConn), c...), nil
+	return NewClient(conn, c...), nil
 }
 
 // NewClient returns a new Client.
-func NewClient(conn *net.UDPConn, c ...ClientConfig) *Client {
+func NewClient(conn net.Conn, c ...ClientConfig) *Client {
 	var conf ClientConfig
 	conf.set(c...)
 	ipv4 := strings.Contains(conn.LocalAddr().String(), ".")
@@ -74,7 +76,7 @@ func (c *ClientConfig) set(conf ...ClientConfig) {
 type Client struct {
 	ipv4 bool
 	conf ClientConfig
-	conn *net.UDPConn
+	conn net.Conn
 	last time.Time
 	cid  uint64
 	tid  uint32
@@ -115,6 +117,7 @@ func (utc *Client) parseError(b []byte) (tid uint32, reason string) {
 
 func (utc *Client) send(b []byte) (err error) {
 	n, err := utc.conn.Write(b)
+	//n, err := utc.conn.WriteTo()
 	if err == nil && n < len(b) {
 		err = io.ErrShortWrite
 	}
