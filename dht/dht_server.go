@@ -476,6 +476,7 @@ func (s *Server) handleQuery(raddr *net.UDPAddr, m krpc.Message) {
 	switch m.Q {
 	case queryMethodPing:
 		s.reply(raddr, m.T, krpc.ResponseResult{})
+
 	case queryMethodFindNode: // See BEP 32
 		var r krpc.ResponseResult
 		n4 := m.A.ContainsWant(krpc.WantNodes)
@@ -495,6 +496,7 @@ func (s *Server) handleQuery(raddr *net.UDPAddr, m krpc.Message) {
 			}
 		}
 		s.reply(raddr, m.T, r)
+
 	case queryMethodGetPeers: // See BEP 32
 		n4 := m.A.ContainsWant(krpc.WantNodes)
 		n6 := m.A.ContainsWant(krpc.WantNodes6)
@@ -539,12 +541,14 @@ func (s *Server) handleQuery(raddr *net.UDPAddr, m krpc.Message) {
 		r.Token = s.tokenManager.Token(raddr)
 		s.reply(raddr, m.T, r)
 		s.conf.OnSearch(m.A.InfoHash.HexString(), raddr.IP, uint16(raddr.Port))
+
 	case queryMethodAnnouncePeer:
 		if s.tokenManager.Check(raddr, m.A.Token) {
 			return
 		}
 		s.reply(raddr, m.T, krpc.ResponseResult{})
 		s.conf.OnTorrent(m.A.InfoHash.HexString(), raddr.IP, m.A.GetPort(raddr.Port))
+
 	default:
 		s.sendError(raddr, m.T, "unknown query method", krpc.ErrorCodeMethodUnknown)
 	}
@@ -760,7 +764,6 @@ func (s *Server) GetPeers(infohash metainfo.Hash, cb ...func(Result)) {
 	for _, node := range nodes {
 		s.getPeers(infohash, node.Addr, s.conf.SearchDepth, ids, cb...)
 	}
-
 }
 
 // AnnouncePeer announces the torrent infohash to the K closest nodes,
