@@ -120,8 +120,8 @@ func TestDecode(t *testing.T) {
 
 		{`d1:X3:foo1:Yi10e1:h3:bare`, new(dT), dT{"foo", 10, ""}, false, false},
 		{`d3:fooli0ei1ee3:barli2ei3eee`, new(map[string][]int), map[string][]int{
-			"foo": []int{0, 1},
-			"bar": []int{2, 3},
+			"foo": {0, 1},
+			"bar": {2, 3},
 		}, false, false},
 		{`de`, new(map[string]string), map[string]string{}, false, false},
 

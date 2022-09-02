@@ -153,7 +153,7 @@ func (bl *blacklist) Add(ip string, port int) {
 		wp.Enable = false
 		wp.Ports = nil
 	} else if wp.Ports == nil {
-		wp.Ports = map[int]struct{}{port: struct{}{}}
+		wp.Ports = map[int]struct{}{port: {}}
 	} else {
 		wp.Ports[port] = struct{}{}
 	}
