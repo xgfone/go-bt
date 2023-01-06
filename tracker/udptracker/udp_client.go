@@ -231,15 +231,15 @@ func (utc *Client) announce(ctx context.Context, req AnnounceRequest) (
 // Announce sends a Announce request to the tracker.
 //
 // Notice:
-//   1. if it does not connect to the UDP tracker server, it will connect to it,
-//      then send the ANNOUNCE request.
-//   2. If returning an error, you should retry it.
-//      See http://www.bittorrent.org/beps/bep_0015.html#time-outs
-func (utc *Client) Announce(c context.Context, r AnnounceRequest) (AnnounceResponse, error) {
+//  1. if it does not connect to the UDP tracker server, it will connect to it,
+//     then send the ANNOUNCE request.
+//  2. If returning an error, you should retry it.
+//     See http://www.bittorrent.org/beps/bep_0015.html#time-outs
+func (utc *Client) Announce(c context.Context, r *AnnounceRequest) (AnnounceResponse, error) {
 	if r.PeerID.IsZero() {
 		r.PeerID = utc.conf.ID
 	}
-	return utc.announce(c, r)
+	return utc.announce(c, *r)
 }
 
 func (utc *Client) scrape(c context.Context, ihs []metainfo.Hash) (
@@ -302,10 +302,10 @@ func (utc *Client) scrape(c context.Context, ihs []metainfo.Hash) (
 // Scrape sends a Scrape request to the tracker.
 //
 // Notice:
-//   1. if it does not connect to the UDP tracker server, it will connect to it,
-//      then send the ANNOUNCE request.
-//   2. If returning an error, you should retry it.
-//      See http://www.bittorrent.org/beps/bep_0015.html#time-outs
+//  1. if it does not connect to the UDP tracker server, it will connect to it,
+//     then send the ANNOUNCE request.
+//  2. If returning an error, you should retry it.
+//     See http://www.bittorrent.org/beps/bep_0015.html#time-outs
 func (utc *Client) Scrape(c context.Context, hs []metainfo.Hash) ([]ScrapeResponse, error) {
 	return utc.scrape(c, hs)
 }

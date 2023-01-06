@@ -102,10 +102,12 @@ func NewDecoder(r io.Reader) *Decoder {
 // Decode reads the bencoded value from its input and stores it in the value pointed to by val.
 // Decode allocates maps/slices as necessary with the following additional rules:
 // To decode a bencoded value into a nil interface value, the type stored in the interface value is one of:
-// 	int64 for bencoded integers
-// 	string for bencoded strings
-// 	[]interface{} for bencoded lists
-// 	map[string]interface{} for bencoded dicts
+//
+//	int64 for bencoded integers
+//	string for bencoded strings
+//	[]interface{} for bencoded lists
+//	map[string]interface{} for bencoded dicts
+//
 // To unmarshal bencode into a value implementing the Unmarshaler interface,
 // Unmarshal calls that value's UnmarshalBencode method.
 // Otherwise, if the value implements encoding.TextUnmarshaler
@@ -116,7 +118,7 @@ func (d *Decoder) Decode(val interface{}) error {
 	if rv.Kind() != reflect.Ptr || rv.IsNil() {
 		return errors.New("Unwritable type passed into decode")
 	}
-
+	//log.Printf("Decoding %s", rv)
 	return d.decodeInto(rv)
 }
 
@@ -337,7 +339,6 @@ func (d *Decoder) decodeList(v reflect.Value) error {
 			return fmt.Errorf("Cant store a []interface{} into %s", v.Type())
 		}
 	}
-
 	// read out the l that prefixes the list
 	ch, err := d.readByte()
 	if err != nil {
@@ -529,7 +530,6 @@ func (d *Decoder) decodeDict(v reflect.Value) error {
 		if err := d.decodeInto(subv); err != nil {
 			return err
 		}
-
 		if isMap {
 			v.SetMapIndex(reflect.ValueOf(key), subv)
 		}

@@ -21,6 +21,9 @@ package httptracker
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base32"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -290,6 +293,28 @@ func NewClient(announceURL, scrapeURL string) *Client {
 func (t *Client) Close() error   { return nil }
 func (t *Client) String() string { return t.AnnounceURL }
 
+var (
+	i2pB64enc *base64.Encoding = base64.NewEncoding("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-~")
+	i2pB32enc *base32.Encoding = base32.NewEncoding("abcdefghijklmnopqrstuvwxyz234567")
+)
+
+func Base32(b64addr string) string {
+	if len(b64addr) > 300 {
+		b64addr = strings.TrimSuffix(b64addr, ".i2p")
+		b64, err := i2pB64enc.DecodeString(b64addr)
+		if err != nil {
+			return ""
+		}
+		//hash.Write([]byte(b64))
+		var s []byte
+		for _, e := range sha256.Sum256(b64) {
+			s = append(s, e)
+		}
+		return strings.ToLower(strings.Replace(i2pB32enc.EncodeToString(s), "=", "", -1)) + ".b32.i2p"
+	}
+	return ""
+}
+
 func (t *Client) send(c context.Context, u string, vs url.Values, r interface{}) (err error) {
 	var url string
 	if strings.IndexByte(u, '?') < 0 {
@@ -310,6 +335,10 @@ func (t *Client) send(c context.Context, u string, vs url.Values, r interface{})
 		resp, err = t.Client.Do(req)
 	}
 
+	if err != nil {
+		return
+	}
+
 	if resp.Body != nil {
 		defer resp.Body.Close()
 	}
@@ -322,7 +351,7 @@ func (t *Client) send(c context.Context, u string, vs url.Values, r interface{})
 }
 
 // Announce sends a Announce request to the tracker.
-func (t *Client) Announce(c context.Context, req AnnounceRequest) (resp AnnounceResponse, err error) {
+func (t *Client) Announce(c context.Context, req *AnnounceRequest) (resp AnnounceResponse, err error) {
 	if req.PeerID.IsZero() {
 		if t.ID.IsZero() {
 			req.PeerID = metainfo.NewRandomHash()
@@ -332,6 +361,7 @@ func (t *Client) Announce(c context.Context, req AnnounceRequest) (resp Announce
 	}
 
 	err = t.send(c, t.AnnounceURL, req.ToQuery(), &resp)
+
 	return
 }
 

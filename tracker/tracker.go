@@ -60,16 +60,17 @@ type AnnounceRequest struct {
 }
 
 // ToHTTPAnnounceRequest creates a new httptracker.AnnounceRequest from itself.
-func (ar *AnnounceRequest) ToHTTPAnnounceRequest() httptracker.AnnounceRequest {
+func (ar *AnnounceRequest) ToHTTPAnnounceRequest() *httptracker.AnnounceRequest {
 	ip := "127.0.0.1"
-	if ar.IP != nil {
+	if PeerAddress != nil {
+		ip = PeerAddress.String()
+	} else if ar.IP != nil {
 		ip = ar.IP.String()
 	}
 	if ar.Port == 0 {
 		ar.Port = 6881
 	}
-
-	return httptracker.AnnounceRequest{
+	return &httptracker.AnnounceRequest{
 		InfoHash:   ar.InfoHash,
 		PeerID:     ar.PeerID,
 		Uploaded:   ar.Uploaded,
@@ -84,8 +85,11 @@ func (ar *AnnounceRequest) ToHTTPAnnounceRequest() httptracker.AnnounceRequest {
 }
 
 // ToUDPAnnounceRequest creates a new udptracker.AnnounceRequest from itself.
-func (ar *AnnounceRequest) ToUDPAnnounceRequest() udptracker.AnnounceRequest {
-	return udptracker.AnnounceRequest{
+func (ar *AnnounceRequest) ToUDPAnnounceRequest() *udptracker.AnnounceRequest {
+	if PeerAddress != nil {
+		ar.IP = PeerAddress
+	}
+	return &udptracker.AnnounceRequest{
 		InfoHash:   ar.InfoHash,
 		PeerID:     ar.PeerID,
 		Downloaded: ar.Downloaded,

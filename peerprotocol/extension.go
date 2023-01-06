@@ -17,7 +17,6 @@ package peerprotocol
 import (
 	"bytes"
 	"errors"
-	"log"
 	"net"
 
 	"github.com/eyedeekay/i2pkeys"
@@ -58,7 +57,6 @@ func (ci CompactIP) String() string {
 		i2p, _ := i2pkeys.DestHashFromBytes(ci)
 		return i2p.String()
 	}
-	log.Printf("CI String: %b, %d", ci, len(ci))
 	return ""
 }
 
@@ -176,10 +174,9 @@ func (um UtMetadataExtendedMsg) EncodeToPayload(buf *bytes.Buffer) (err error) {
 
 // EncodeToBytes is equal to
 //
-//   buf := new(bytes.Buffer)
-//   err = um.EncodeToPayload(buf)
-//   return buf.Bytes(), err
-//
+//	buf := new(bytes.Buffer)
+//	err = um.EncodeToPayload(buf)
+//	return buf.Bytes(), err
 func (um UtMetadataExtendedMsg) EncodeToBytes() (b []byte, err error) {
 	buf := bytes.NewBuffer(make([]byte, 0, 128))
 	if err = um.EncodeToPayload(buf); err == nil {

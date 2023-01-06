@@ -19,7 +19,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"net"
+	"strings"
 
+	"github.com/eyedeekay/i2pkeys"
 	"github.com/xgfone/bt/bencode"
 	"github.com/xgfone/bt/metainfo"
 )
@@ -38,6 +40,15 @@ type Peer struct {
 
 // Addresses returns the list of the addresses that the peer listens on.
 func (p Peer) Addresses() (addrs []metainfo.Address, err error) {
+	if strings.HasSuffix(p.IP, ".i2p") {
+		var netAddr net.Addr
+		if netAddr, err = i2pkeys.NewI2PAddrFromString(strings.TrimSuffix(p.IP, ".i2p")); err != nil {
+			return
+		} else {
+			return []metainfo.Address{{IP: netAddr, Port: p.Port}}, nil
+		}
+
+	}
 	if ip := net.ParseIP(p.IP); len(ip) != 0 {
 		return []metainfo.Address{{IP: &net.IPAddr{IP: ip}, Port: p.Port}}, nil
 	}
@@ -73,16 +84,19 @@ func (ps *Peers) UnmarshalBencode(b []byte) (err error) {
 		peers := make(Peers, 0, _len/6)
 		for i := 0; i < _len; i += 6 {
 			var addr metainfo.Address
-			if err = addr.UnmarshalBinary([]byte(vs[i : i+6])); err != nil {
+			addrBytes := []byte(vs[i : i+6])
+			if err = addr.UnmarshalBinary(addrBytes); err != nil {
 				return
 			}
 			peers = append(peers, Peer{IP: addr.IP.String(), Port: addr.Port})
+
 		}
 
 		*ps = peers
 	case []interface{}: // BEP 3
 		peers := make(Peers, len(vs))
 		for i, p := range vs {
+
 			m, ok := p.(map[string]interface{})
 			if !ok {
 				return errInvalidPeer

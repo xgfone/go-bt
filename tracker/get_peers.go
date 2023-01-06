@@ -16,11 +16,15 @@ package tracker
 
 import (
 	"context"
+	"net"
 	"net/url"
 	"sync"
 
 	"github.com/xgfone/bt/metainfo"
 )
+
+// Force a peer address to be used
+var PeerAddress net.Addr
 
 // GetPeersResult represents the result of getting the peers from the tracker.
 type GetPeersResult struct {
@@ -89,8 +93,7 @@ func getPeers(ctx context.Context, wg *sync.WaitGroup, tracker string,
 
 	client, err := NewClient(tracker, ClientConfig{ID: nodeID})
 	if err == nil {
-		resp, err = client.Announce(ctx, AnnounceRequest{InfoHash: infoHash})
+		resp, err = client.Announce(ctx, AnnounceRequest{InfoHash: infoHash, IP: PeerAddress})
 	}
-
 	return
 }

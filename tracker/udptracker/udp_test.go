@@ -89,7 +89,7 @@ func ExampleClient() {
 	// Send the ANNOUNCE request to the UDP tracker server,
 	// and get the ANNOUNCE response.
 	exts := []Extension{NewURLData([]byte("data")), NewNop()}
-	req := AnnounceRequest{IP: &net.IPAddr{IP: net.ParseIP("127.0.0.1")}, Port: 80, Exts: exts}
+	req := &AnnounceRequest{IP: &net.IPAddr{IP: net.ParseIP("127.0.0.1")}, Port: 80, Exts: exts}
 	resp, err := client.Announce(context.Background(), req)
 	if err != nil {
 		log.Fatal(err)
