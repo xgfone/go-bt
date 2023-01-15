@@ -31,9 +31,7 @@ type BlockUploadHandler struct {
 }
 
 // NewBlockUploadHandler returns a new BlockUploadHandler.
-func NewBlockUploadHandler(info metainfo.Info,
-	onBlock func(pieceIndex, pieceOffset uint32, b []byte) error,
-	respondBlock func(c *pp.PeerConn) error) BlockUploadHandler {
+func NewBlockUploadHandler(info metainfo.Info, onBlock func(pieceIndex, pieceOffset uint32, b []byte) error, respondBlock func(c *pp.PeerConn) error) BlockUploadHandler {
 	return BlockUploadHandler{
 		Info:         info,
 		OnBlock:      onBlock,

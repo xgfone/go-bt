@@ -317,12 +317,12 @@ func (s *Server) Node6Num() int { return s.routingTable6.Len() }
 // AddNode adds the node into the routing table.
 //
 // The returned value:
-//   NodeAdded:           The node is added successfully.
-//   NodeNotAdded:        The node is not added and is discarded.
-//   NodeExistAndUpdated: The node has existed, and its status has been updated.
-//   NodeExistAndChanged: The node has existed, but the address is inconsistent.
-//                        The current node will be discarded.
 //
+//	NodeAdded:           The node is added successfully.
+//	NodeNotAdded:        The node is not added and is discarded.
+//	NodeExistAndUpdated: The node has existed, and its status has been updated.
+//	NodeExistAndChanged: The node has existed, but the address is inconsistent.
+//	                     The current node will be discarded.
 func (s *Server) AddNode(node krpc.Node) int {
 	// For IPv6
 	if node.Addr.IsIPv6() {

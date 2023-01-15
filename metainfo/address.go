@@ -270,7 +270,8 @@ func (a Address) String() string {
 }
 
 // Equal reports whether n is equal to o, which is equal to
-//   n.HasIPAndPort(o.IP, o.Port)
+//
+//	n.HasIPAndPort(o.IP, o.Port)
 func (a Address) Equal(o Address) bool {
 	return a.Port == o.Port && a.IP.String() == o.IP.String()
 }
