@@ -1,12 +1,12 @@
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/eyedeekay/goSam v0.32.31-0.20210122211817-f97683379f23 h1:AHm/EzBilSQH+RFgEuslnlCpVQd88MQWx7KHW/VIQlc=
 github.com/eyedeekay/goSam v0.32.31-0.20210122211817-f97683379f23/go.mod h1:UgJnih/LpotwKriwVPOEa6yPDM2NDdVrKfLtS5DOLPE=
-github.com/eyedeekay/i2pkeys v0.0.0-20220310055120-b97558c06ac8 h1:9QLD6ZWn1Evc0bT971aArjkit94+s5FMc2stDfEpen4=
-github.com/eyedeekay/i2pkeys v0.0.0-20220310055120-b97558c06ac8/go.mod h1:W9KCm9lqZ+Ozwl3dwcgnpPXAML97+I8Jiht7o5A8YBM=
+github.com/eyedeekay/i2pkeys v0.0.0-20220310052025-204d4ae6dcae/go.mod h1:W9KCm9lqZ+Ozwl3dwcgnpPXAML97+I8Jiht7o5A8YBM=
+github.com/eyedeekay/i2pkeys v0.33.0 h1:5SzUyWxNjV6AvYv/WaI8J4dSgAfv7/WEps6pDLe2YSs=
+github.com/eyedeekay/i2pkeys v0.33.0/go.mod h1:W9KCm9lqZ+Ozwl3dwcgnpPXAML97+I8Jiht7o5A8YBM=
 github.com/eyedeekay/sam3 v0.32.32/go.mod h1:qRA9KIIVxbrHlkj+ZB+OoxFGFgdKeGp1vSgPw26eOVU=
-github.com/eyedeekay/sam3 v0.32.33-0.20220303231856-3c910e4b33dc h1:b9yv4CWSm8wGOQdzcYSBNdoj4LDLugFQAvsDf2rCZjM=
-github.com/eyedeekay/sam3 v0.32.33-0.20220303231856-3c910e4b33dc/go.mod h1:F4dHMuZ8McQsPedJdxITByRCO/krMv/a66ERA74Wa1w=
+github.com/eyedeekay/sam3 v0.33.5 h1:mY2MmEG4W35AOpG/G7DOdAhFZWRwFxlm+NmIoub1Xnw=
+github.com/eyedeekay/sam3 v0.33.5/go.mod h1:sPtlI4cRm7wD0UywOzLPvvdY1G++vBSK3n+jiIGqWlU=
 github.com/getlantern/context v0.0.0-20190109183933-c447772a6520/go.mod h1:L+mq6/vvYHKjCX2oez0CgEAJmbq1fbb/oNJIWQkBybY=
 github.com/getlantern/errors v1.0.1/go.mod h1:l+xpFBrCtDLpK9qNjxs+cHU6+BAdlBaxHqikB6Lku3A=
 github.com/getlantern/go-socks5 v0.0.0-20171114193258-79d4dd3e2db5/go.mod h1:kGHRXch95rnGLHjER/GhhFiHvfnqNz7KqWD9kGfATHY=
