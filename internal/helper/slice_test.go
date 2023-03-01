@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2023 xgfone
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package utils
+package helper
 
-// InStringSlice reports whether s is in ss.
-func InStringSlice(ss []string, s string) bool {
-	for _, v := range ss {
-		if v == s {
-			return true
-		}
+import "testing"
+
+func TestContainsString(t *testing.T) {
+	if !ContainsString([]string{"a", "b"}, "a") {
+		t.Fail()
 	}
 
-	return false
+	if ContainsString([]string{"a", "b"}, "z") {
+		t.Fail()
+	}
 }

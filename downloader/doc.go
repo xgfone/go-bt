@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2023 xgfone
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package utils
-
-import "crypto/rand"
-
-// RandomString generates a size-length string randomly.
-func RandomString(size int) string {
-	bs := make([]byte, size)
-	rand.Read(bs)
-	return string(bs)
-}
+// Package downloader is used to download the torrent or the real file
+// from the peer node by the peer wire protocol.
+package downloader

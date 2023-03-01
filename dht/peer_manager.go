@@ -15,23 +15,24 @@
 package dht
 
 import (
-	"net"
 	"sync"
 	"time"
 
+	"github.com/xgfone/bt/krpc"
 	"github.com/xgfone/bt/metainfo"
 )
 
 // PeerManager is used to manage the peers.
 type PeerManager interface {
 	// If ipv6 is true, only return ipv6 addresses. Or return ipv4 addresses.
-	GetPeers(infohash metainfo.Hash, maxnum int, ipv6 bool) []metainfo.Address
+	GetPeers(infohash metainfo.Hash, maxnum int, ipv6 bool) []string
 }
+
+var _ PeerManager = new(tokenPeerManager)
 
 type peer struct {
 	ID    metainfo.Hash
-	IP    net.IP
-	Port  uint16
+	Addr  krpc.Addr
 	Token string
 	Time  time.Time
 }
@@ -75,7 +76,7 @@ func (tpm *tokenPeerManager) Start(interval time.Duration) {
 	}
 }
 
-func (tpm *tokenPeerManager) Set(id metainfo.Hash, addr *net.UDPAddr, token string) {
+func (tpm *tokenPeerManager) Set(id metainfo.Hash, addr krpc.Addr, token string) {
 	addrkey := addr.String()
 	tpm.lock.Lock()
 	peers, ok := tpm.peers[id]
@@ -83,17 +84,11 @@ func (tpm *tokenPeerManager) Set(id metainfo.Hash, addr *net.UDPAddr, token stri
 		peers = make(map[string]peer, 4)
 		tpm.peers[id] = peers
 	}
-	peers[addrkey] = peer{
-		ID:    id,
-		IP:    addr.IP,
-		Port:  uint16(addr.Port),
-		Token: token,
-		Time:  time.Now(),
-	}
+	peers[addrkey] = peer{ID: id, Addr: addr, Token: token, Time: time.Now()}
 	tpm.lock.Unlock()
 }
 
-func (tpm *tokenPeerManager) Get(id metainfo.Hash, addr *net.UDPAddr) (token string) {
+func (tpm *tokenPeerManager) Get(id metainfo.Hash, addr krpc.Addr) (token string) {
 	addrkey := addr.String()
 	tpm.lock.RLock()
 	if peers, ok := tpm.peers[id]; ok {
@@ -113,9 +108,8 @@ func (tpm *tokenPeerManager) Stop() {
 	}
 }
 
-func (tpm *tokenPeerManager) GetPeers(infohash metainfo.Hash, maxnum int,
-	ipv6 bool) (addrs []metainfo.Address) {
-	addrs = make([]metainfo.Address, 0, maxnum)
+func (tpm *tokenPeerManager) GetPeers(infohash metainfo.Hash, maxnum int, ipv6 bool) (addrs []string) {
+	addrs = make([]string, 0, maxnum)
 	tpm.lock.RLock()
 	if peers, ok := tpm.peers[infohash]; ok {
 		for _, peer := range peers {
@@ -124,13 +118,13 @@ func (tpm *tokenPeerManager) GetPeers(infohash metainfo.Hash, maxnum int,
 			}
 
 			if ipv6 { // For IPv6
-				if isIPv6(peer.IP) {
+				if isIPv6(peer.Addr.IP) {
 					maxnum--
-					addrs = append(addrs, metainfo.NewAddress(peer.IP, peer.Port))
+					addrs = append(addrs, peer.Addr.String())
 				}
-			} else if !isIPv6(peer.IP) { // For IPv4
+			} else if !isIPv6(peer.Addr.IP) { // For IPv4
 				maxnum--
-				addrs = append(addrs, metainfo.NewAddress(peer.IP, peer.Port))
+				addrs = append(addrs, peer.Addr.String())
 			}
 		}
 	}

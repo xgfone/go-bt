@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2023 xgfone
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package utils
+package helper
 
 import (
-	"testing"
+	crand "crypto/rand"
+	"math/rand"
 )
 
-func TestInStringSlice(t *testing.T) {
-	if !InStringSlice([]string{"a", "b"}, "a") {
-		t.Fail()
+// RandomString generates a size-length string randomly.
+func RandomString(size int) string {
+	bs := make([]byte, size)
+	if n, _ := crand.Read(bs); n < size {
+		for ; n < size; n++ {
+			bs[n] = byte(rand.Intn(256))
+		}
 	}
-
-	if InStringSlice([]string{"a", "b"}, "z") {
-		t.Fail()
-	}
+	return string(bs)
 }

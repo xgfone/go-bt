@@ -52,7 +52,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/url"
 	"os"
 	"time"
 
@@ -73,7 +72,7 @@ func getPeersFromTrackers(id, infohash metainfo.Hash, trackers []string) (peers 
 	defer cancel()
 
 	resp := tracker.GetPeers(c, id, infohash, trackers)
-	for r := range resp {
+	for _, r := range resp {
 		for _, addr := range r.Resp.Addresses {
 			addrs := addr.String()
 			nonexist := true

@@ -53,7 +53,7 @@ type Result struct {
 	// Addr is the address of the peer where the request is sent to.
 	//
 	// Notice: it may be nil for "get_peers" request.
-	Addr *net.UDPAddr
+	Addr net.Addr
 
 	// For Error
 	Code    int    // 0 represents the success.
@@ -61,7 +61,7 @@ type Result struct {
 	Timeout bool   // Timeout indicates whether the response is timeout.
 
 	// The list of the address of the peers returned by GetPeers.
-	Peers []metainfo.Address
+	Peers []string
 }
 
 // Config is used to configure the DHT server.
@@ -134,18 +134,24 @@ type Config struct {
 	// The default is log.Printf.
 	ErrorLog func(format string, args ...interface{})
 
+	// They is used to convert the address between net.Addr and krpc.Addr.
+	//
+	// For the default, it asserts net.Addr to *net.UDPAddr.
+	GetNetAddr  func(krpc.Addr) net.Addr
+	GetKrpcAddr func(net.Addr) krpc.Addr
+
 	// OnSearch is called when someone searches the torrent infohash,
 	// that's, the "get_peers" query.
 	//
 	// The default callback does noting.
-	OnSearch func(infohash string, ip net.IP, port uint16)
+	OnSearch func(infohash string, addr krpc.Addr)
 
 	// OnTorrent is called when someone has the torrent infohash
 	// or someone has just downloaded the torrent infohash,
 	// that's, the "get_peers" response or "announce_peer" query.
 	//
 	// The default callback does noting.
-	OnTorrent func(infohash string, ip net.IP, port uint16)
+	OnTorrent func(infohash string, addr string)
 
 	// HandleInMessage is used to intercept the incoming DHT message.
 	// For example, you can debug the message as the log.
@@ -153,23 +159,36 @@ type Config struct {
 	// Return true if going on handling by the default. Or return false.
 	//
 	// The default is nil.
-	HandleInMessage func(*net.UDPAddr, *krpc.Message) bool
+	HandleInMessage func(net.Addr, *krpc.Message) (handled bool)
 
 	// HandleOutMessage is used to intercept the outgoing DHT message.
 	// For example, you can debug the message as the log.
 	//
-	// Return (false, nil) if going on handling by the default.
+	// Return (true, nil) if not going on handling by the default.
 	//
 	// The default is nil.
-	HandleOutMessage func(*net.UDPAddr, *krpc.Message) (wrote bool, err error)
+	HandleOutMessage func(net.Addr, *krpc.Message) (wrote bool, err error)
 }
 
-func (c Config) in(*net.UDPAddr, *krpc.Message) bool           { return true }
-func (c Config) out(*net.UDPAddr, *krpc.Message) (bool, error) { return false, nil }
+func (c Config) in(net.Addr, *krpc.Message) bool           { return false }
+func (c Config) out(net.Addr, *krpc.Message) (bool, error) { return false, nil }
 
-func (c *Config) set(conf ...Config) {
-	if len(conf) > 0 {
-		*c = conf[0]
+func (c Config) onSearch(string, krpc.Addr) {}
+func (c Config) onTorrent(string, string)   {}
+
+func (c Config) k2nAddr(a krpc.Addr) net.Addr {
+	if a.Orig != nil {
+		return a.Orig
+	}
+	return a.UDPAddr()
+}
+func (c Config) n2kAddr(a net.Addr) krpc.Addr {
+	return krpc.NewAddrFromUDPAddr(a.(*net.UDPAddr))
+}
+
+func (c *Config) set(conf *Config) {
+	if conf != nil {
+		*c = *conf
 	}
 
 	if c.K <= 0 {
@@ -197,10 +216,16 @@ func (c *Config) set(conf ...Config) {
 		c.RespTimeout = time.Second * 10
 	}
 	if c.OnSearch == nil {
-		c.OnSearch = func(string, net.IP, uint16) {}
+		c.OnSearch = c.onSearch
 	}
 	if c.OnTorrent == nil {
-		c.OnTorrent = func(string, net.IP, uint16) {}
+		c.OnTorrent = c.onTorrent
+	}
+	if c.GetNetAddr == nil {
+		c.GetNetAddr = c.k2nAddr
+	}
+	if c.GetKrpcAddr == nil {
+		c.GetKrpcAddr = c.n2kAddr
 	}
 	if c.HandleInMessage == nil {
 		c.HandleInMessage = c.in
@@ -215,6 +240,7 @@ type Server struct {
 	conf Config
 	exit chan struct{}
 	conn net.PacketConn
+	lock sync.Mutex
 	once sync.Once
 
 	ipv4 bool
@@ -230,9 +256,9 @@ type Server struct {
 }
 
 // NewServer returns a new DHT server.
-func NewServer(conn net.PacketConn, config ...Config) *Server {
+func NewServer(conn net.PacketConn, config *Config) *Server {
 	var conf Config
-	conf.set(config...)
+	conf.set(config)
 
 	if len(conf.IPProtocols) == 0 {
 		host, _, err := net.SplitHostPort(conn.LocalAddr().String())
@@ -278,7 +304,6 @@ func NewServer(conn net.PacketConn, config ...Config) *Server {
 	if s.peerManager == nil {
 		s.peerManager = s.tokenPeerManager
 	}
-
 	return s
 }
 
@@ -292,14 +317,14 @@ func (s *Server) Bootstrap(addrs []string) {
 	if (s.ipv4 && s.routingTable4.Len() == 0) ||
 		(s.ipv6 && s.routingTable6.Len() == 0) {
 		for _, addr := range addrs {
-			as, err := metainfo.NewAddressesFromString(addr)
+			ipports, err := krpc.ParseAddrs(addr)
 			if err != nil {
 				s.conf.ErrorLog(err.Error())
 				continue
 			}
 
-			for _, a := range as {
-				if isIPv6(a.IP) {
+			for _, ipport := range ipports {
+				if isIPv6(ipport.IP) {
 					if !s.ipv6 {
 						continue
 					}
@@ -307,8 +332,8 @@ func (s *Server) Bootstrap(addrs []string) {
 					continue
 				}
 
-				if err = s.FindNode(a.UDPAddr(), s.conf.ID); err != nil {
-					s.conf.ErrorLog(`fail to bootstrap '%s': %s`, a.String(), err)
+				if err = s.FindNode(ipport, s.conf.ID); err != nil {
+					s.conf.ErrorLog(`fail to bootstrap '%s': %s`, ipport.String(), err)
 				}
 			}
 		}
@@ -324,12 +349,12 @@ func (s *Server) Node6Num() int { return s.routingTable6.Len() }
 // AddNode adds the node into the routing table.
 //
 // The returned value:
-//   NodeAdded:           The node is added successfully.
-//   NodeNotAdded:        The node is not added and is discarded.
-//   NodeExistAndUpdated: The node has existed, and its status has been updated.
-//   NodeExistAndChanged: The node has existed, but the address is inconsistent.
-//                        The current node will be discarded.
 //
+//	NodeAdded:           The node is added successfully.
+//	NodeNotAdded:        The node is not added and is discarded.
+//	NodeExistAndUpdated: The node has existed, and its status has been updated.
+//	NodeExistAndChanged: The node has existed, but the address is inconsistent.
+//	                     The current node will be discarded.
 func (s *Server) AddNode(node krpc.Node) int {
 	// For IPv6
 	if isIPv6(node.Addr.IP) {
@@ -347,13 +372,13 @@ func (s *Server) AddNode(node krpc.Node) int {
 	return NodeNotAdded
 }
 
-func (s *Server) addNode(a *net.UDPAddr, id metainfo.Hash, ro bool) (r int) {
+func (s *Server) addNode(kaddr krpc.Addr, id metainfo.Hash, ro bool) (r int) {
 	if ro { // BEP 43
 		return NodeNotAdded
 	}
 
-	if r = s.AddNode(krpc.NewNodeByUDPAddr(id, a)); r == NodeExistAndChanged {
-		s.conf.Blacklist.Add(a.IP.String(), a.Port)
+	if r = s.AddNode(krpc.NewNode(id, kaddr)); r == NodeExistAndChanged {
+		s.conf.Blacklist.Add(kaddr)
 	}
 
 	return
@@ -401,11 +426,15 @@ func (s *Server) Run() {
 			return
 		}
 
-		s.handlePacket(raddr.(*net.UDPAddr), buf[:n])
+		s.handlePacket(raddr, buf[:n])
 	}
 }
 
-func (s *Server) isDisabled(raddr *net.UDPAddr) bool {
+func (s *Server) isDisabled(raddr krpc.Addr) bool {
+	if len(raddr.IP) == 0 {
+		return false
+	}
+
 	if isIPv6(raddr.IP) {
 		if !s.ipv6 {
 			return true
@@ -417,13 +446,16 @@ func (s *Server) isDisabled(raddr *net.UDPAddr) bool {
 }
 
 // HandlePacket handles the incoming DHT message.
-func (s *Server) handlePacket(raddr *net.UDPAddr, data []byte) {
-	if s.isDisabled(raddr) {
+func (s *Server) handlePacket(raddr net.Addr, data []byte) {
+	kaddr := s.conf.GetKrpcAddr(raddr)
+	kaddr.Orig = raddr
+
+	if s.isDisabled(kaddr) {
 		return
 	}
 
 	// Check whether the raddr is in the ip blacklist. If yes, discard it.
-	if s.conf.Blacklist.In(raddr.IP.String(), raddr.Port) {
+	if s.conf.Blacklist.In(kaddr) {
 		return
 	}
 
@@ -436,46 +468,50 @@ func (s *Server) handlePacket(raddr *net.UDPAddr, data []byte) {
 		return
 	}
 
-	// TODO: Should we use a task pool??
-	go s.handleMessage(raddr, msg)
+	// (xgf): Should we use a task pool??
+	go s.handleMessage(kaddr, msg)
 }
 
-func (s *Server) handleMessage(raddr *net.UDPAddr, m krpc.Message) {
-	if !s.conf.HandleInMessage(raddr, &m) {
+func (s *Server) handleMessage(kaddr krpc.Addr, m krpc.Message) {
+	if s.conf.HandleInMessage(kaddr.Orig, &m) {
 		return
 	}
 
 	switch m.Y {
 	case "q":
 		if !m.A.ID.IsZero() {
-			r := s.addNode(raddr, m.A.ID, m.RO)
+			r := s.addNode(kaddr, m.A.ID, m.RO)
 			if r != NodeExistAndChanged && !s.conf.ReadOnly { // BEP 43
-				s.handleQuery(raddr, m)
+				s.handleQuery(kaddr, m)
 			}
 		}
+
 	case "r":
 		if !m.R.ID.IsZero() {
-			if s.addNode(raddr, m.R.ID, m.RO) == NodeExistAndChanged {
+			if s.addNode(kaddr, m.R.ID, m.RO) == NodeExistAndChanged {
 				return
 			}
 
-			if t := s.transactionManager.PopTransaction(m.T, raddr); t != nil {
-				t.OnResponse(t, raddr, m)
+			if t := s.transactionManager.PopTransaction(m.T, kaddr); t != nil {
+				t.OnResponse(t, kaddr, m)
 			}
 		}
+
 	case "e":
-		if t := s.transactionManager.PopTransaction(m.T, raddr); t != nil {
+		if t := s.transactionManager.PopTransaction(m.T, kaddr); t != nil {
 			t.OnError(t, m.E.Code, m.E.Reason)
 		}
+
 	default:
 		s.conf.ErrorLog("unknown dht message type '%s'", m.Y)
 	}
 }
 
-func (s *Server) handleQuery(raddr *net.UDPAddr, m krpc.Message) {
+func (s *Server) handleQuery(raddr krpc.Addr, m krpc.Message) {
 	switch m.Q {
 	case queryMethodPing:
 		s.reply(raddr, m.T, krpc.ResponseResult{})
+
 	case queryMethodFindNode: // See BEP 32
 		var r krpc.ResponseResult
 		n4 := m.A.ContainsWant(krpc.WantNodes)
@@ -495,6 +531,7 @@ func (s *Server) handleQuery(raddr *net.UDPAddr, m krpc.Message) {
 			}
 		}
 		s.reply(raddr, m.T, r)
+
 	case queryMethodGetPeers: // See BEP 32
 		n4 := m.A.ContainsWant(krpc.WantNodes)
 		n6 := m.A.ContainsWant(krpc.WantNodes6)
@@ -538,33 +575,39 @@ func (s *Server) handleQuery(raddr *net.UDPAddr, m krpc.Message) {
 
 		r.Token = s.tokenManager.Token(raddr)
 		s.reply(raddr, m.T, r)
-		s.conf.OnSearch(m.A.InfoHash.HexString(), raddr.IP, uint16(raddr.Port))
+		s.conf.OnSearch(m.A.InfoHash.HexString(), raddr)
+
 	case queryMethodAnnouncePeer:
 		if s.tokenManager.Check(raddr, m.A.Token) {
 			return
 		}
 		s.reply(raddr, m.T, krpc.ResponseResult{})
-		s.conf.OnTorrent(m.A.InfoHash.HexString(), raddr.IP, m.A.GetPort(raddr.Port))
+		s.conf.OnTorrent(m.A.InfoHash.HexString(), raddr.String())
+
 	default:
 		s.sendError(raddr, m.T, "unknown query method", krpc.ErrorCodeMethodUnknown)
 	}
 }
 
-func (s *Server) send(raddr *net.UDPAddr, m krpc.Message) (wrote bool, err error) {
-	// // TODO: Should we check the ip blacklist??
-	// if s.conf.Blacklist.In(raddr.IP.String(), raddr.Port) {
+func (s *Server) send(kaddr krpc.Addr, m krpc.Message) (wrote bool, err error) {
+	// // (xgf): Should we check the ip blacklist??
+	// if s.conf.Blacklist.In(kaddr) {
 	//     return
 	// }
 
 	m.RO = s.conf.ReadOnly // BEP 43
-	if wrote, err = s.conf.HandleOutMessage(raddr, &m); !wrote && err == nil {
-		wrote, err = s._send(raddr, m)
+	kaddr.Orig = s.conf.GetNetAddr(kaddr)
+
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	if wrote, err = s.conf.HandleOutMessage(kaddr.Orig, &m); !wrote && err == nil {
+		wrote, err = s._send(kaddr, m)
 	}
 
 	return
 }
 
-func (s *Server) _send(raddr *net.UDPAddr, m krpc.Message) (wrote bool, err error) {
+func (s *Server) _send(kaddr krpc.Addr, m krpc.Message) (wrote bool, err error) {
 	if m.T == "" || m.Y == "" {
 		panic(`DHT message "t" or "y" must not be empty`)
 	}
@@ -575,10 +618,10 @@ func (s *Server) _send(raddr *net.UDPAddr, m krpc.Message) (wrote bool, err erro
 		panic(err)
 	}
 
-	n, err := s.conn.WriteTo(buf.Bytes(), raddr)
+	n, err := s.conn.WriteTo(buf.Bytes(), kaddr.Orig)
 	if err != nil {
-		err = fmt.Errorf("error writing %d bytes to %s: %s", buf.Len(), raddr, err)
-		s.conf.Blacklist.Add(raddr.IP.String(), 0)
+		err = fmt.Errorf("error writing %d bytes to %v: %s", buf.Len(), kaddr.Orig, err)
+		s.conf.Blacklist.Add(kaddr)
 		return
 	}
 
@@ -590,13 +633,13 @@ func (s *Server) _send(raddr *net.UDPAddr, m krpc.Message) (wrote bool, err erro
 	return
 }
 
-func (s *Server) sendError(raddr *net.UDPAddr, tid, reason string, code int) {
+func (s *Server) sendError(raddr krpc.Addr, tid, reason string, code int) {
 	if _, err := s.send(raddr, krpc.NewErrorMsg(tid, code, reason)); err != nil {
 		s.conf.ErrorLog("error replying to %s: %s", raddr.String(), err.Error())
 	}
 }
 
-func (s *Server) reply(raddr *net.UDPAddr, tid string, r krpc.ResponseResult) {
+func (s *Server) reply(raddr krpc.Addr, tid string, r krpc.ResponseResult) {
 	r.ID = s.conf.ID
 	if _, err := s.send(raddr, krpc.NewResponseMsg(tid, r)); err != nil {
 		s.conf.ErrorLog("error replying to %s: %s", raddr.String(), err.Error())
@@ -627,7 +670,7 @@ func (s *Server) onError(t *transaction, code int, reason string) {
 }
 
 func (s *Server) onTimeout(t *transaction) {
-	// TODO: Should we use a task pool??
+	// (xgf): Should we use a task pool??
 	t.Done(Result{Timeout: true})
 
 	var qid string
@@ -641,11 +684,19 @@ func (s *Server) onTimeout(t *transaction) {
 		t.ID, s.conf.ID, t.Query, qid, s.conn.LocalAddr(), t.Addr.String())
 }
 
-func (s *Server) onPingResp(t *transaction, a *net.UDPAddr, m krpc.Message) {
+// Ping sends a PING query to addr, and the callback function cb will be called
+// when the response or error is returned, or it's timeout.
+func (s *Server) Ping(addr krpc.Addr, cb ...func(Result)) (err error) {
+	t := newTransaction(s, addr, queryMethodPing, krpc.QueryArg{}, cb...)
+	t.OnResponse = s.onPingResp
+	return s.request(t)
+}
+
+func (s *Server) onPingResp(t *transaction, a krpc.Addr, m krpc.Message) {
 	t.Done(Result{})
 }
 
-func (s *Server) onGetPeersResp(t *transaction, a *net.UDPAddr, m krpc.Message) {
+func (s *Server) onGetPeersResp(t *transaction, a krpc.Addr, m krpc.Message) {
 	// Store the response node with the token.
 	if m.R.Token != "" {
 		s.tokenPeerManager.Set(m.R.ID, a, m.R.Token)
@@ -655,7 +706,7 @@ func (s *Server) onGetPeersResp(t *transaction, a *net.UDPAddr, m krpc.Message) 
 	if len(m.R.Values) > 0 {
 		t.Done(Result{Peers: m.R.Values})
 		for _, addr := range m.R.Values {
-			s.conf.OnTorrent(t.Arg.InfoHash.HexString(), addr.IP, addr.Port)
+			s.conf.OnTorrent(t.Arg.InfoHash.HexString(), addr)
 		}
 		return
 	}
@@ -706,24 +757,15 @@ func (s *Server) onGetPeersResp(t *transaction, a *net.UDPAddr, m krpc.Message) 
 	}
 }
 
-func (s *Server) getPeers(info metainfo.Hash, addr metainfo.Address, depth int,
-	ids metainfo.Hashes, cb ...func(Result)) {
+func (s *Server) getPeers(info metainfo.Hash, addr krpc.Addr, depth int, ids metainfo.Hashes, cb ...func(Result)) {
 	arg := krpc.QueryArg{InfoHash: info, Wants: s.want}
-	t := newTransaction(s, addr.UDPAddr(), queryMethodGetPeers, arg, cb...)
+	t := newTransaction(s, addr, queryMethodGetPeers, arg, cb...)
 	t.OnResponse = s.onGetPeersResp
 	t.Depth = depth
 	t.Visited = ids
 	if err := s.request(t); err != nil {
 		s.conf.ErrorLog("fail to send query message to '%s': %s", addr.String(), err)
 	}
-}
-
-// Ping sends a PING query to addr, and the callback function cb will be called
-// when the response or error is returned, or it's timeout.
-func (s *Server) Ping(addr *net.UDPAddr, cb ...func(Result)) (err error) {
-	t := newTransaction(s, addr, queryMethodPing, krpc.QueryArg{}, cb...)
-	t.OnResponse = s.onPingResp
-	return s.request(t)
 }
 
 // GetPeers searches the peer storing the torrent by the infohash of the torrent,
@@ -760,7 +802,6 @@ func (s *Server) GetPeers(infohash metainfo.Hash, cb ...func(Result)) {
 	for _, node := range nodes {
 		s.getPeers(infohash, node.Addr, s.conf.SearchDepth, ids, cb...)
 	}
-
 }
 
 // AnnouncePeer announces the torrent infohash to the K closest nodes,
@@ -780,16 +821,15 @@ func (s *Server) AnnouncePeer(infohash metainfo.Hash, port uint16, impliedPort b
 
 	sentNodes := make([]krpc.Node, 0, len(nodes))
 	for _, node := range nodes {
-		addr := node.Addr.UDPAddr()
-		token := s.tokenPeerManager.Get(infohash, addr)
+		token := s.tokenPeerManager.Get(infohash, node.Addr)
 		if token == "" {
 			continue
 		}
 
 		arg := krpc.QueryArg{ImpliedPort: impliedPort, InfoHash: infohash, Port: port, Token: token}
-		t := newTransaction(s, addr, queryMethodAnnouncePeer, arg)
+		t := newTransaction(s, node.Addr, queryMethodAnnouncePeer, arg)
 		if err := s.request(t); err != nil {
-			s.conf.ErrorLog("fail to send query message to '%s': %s", addr.String(), err)
+			s.conf.ErrorLog("fail to send query message to '%s': %s", node.Addr.String(), err)
 		} else {
 			sentNodes = append(sentNodes, node)
 		}
@@ -801,7 +841,7 @@ func (s *Server) AnnouncePeer(infohash metainfo.Hash, port uint16, impliedPort b
 // FindNode sends the "find_node" query to the addr to find the target node.
 //
 // Notice: In general, it's used to bootstrap the routing table.
-func (s *Server) FindNode(addr *net.UDPAddr, target metainfo.Hash) error {
+func (s *Server) FindNode(addr krpc.Addr, target metainfo.Hash) error {
 	if target.IsZero() {
 		panic("the target is ZERO")
 	}
@@ -809,8 +849,7 @@ func (s *Server) FindNode(addr *net.UDPAddr, target metainfo.Hash) error {
 	return s.findNode(target, addr, s.conf.SearchDepth, nil)
 }
 
-func (s *Server) findNode(target metainfo.Hash, addr *net.UDPAddr, depth int,
-	ids metainfo.Hashes) error {
+func (s *Server) findNode(target metainfo.Hash, addr krpc.Addr, depth int, ids metainfo.Hashes) error {
 	arg := krpc.QueryArg{Target: target, Wants: s.want}
 	t := newTransaction(s, addr, queryMethodFindNode, arg)
 	t.OnResponse = s.onFindNodeResp
@@ -818,7 +857,7 @@ func (s *Server) findNode(target metainfo.Hash, addr *net.UDPAddr, depth int,
 	return s.request(t)
 }
 
-func (s *Server) onFindNodeResp(t *transaction, a *net.UDPAddr, m krpc.Message) {
+func (s *Server) onFindNodeResp(t *transaction, _ krpc.Addr, m krpc.Message) {
 	t.Done(Result{})
 
 	// Search the target node recursively.
@@ -860,7 +899,7 @@ func (s *Server) onFindNodeResp(t *transaction, a *net.UDPAddr, m krpc.Message) 
 	}
 
 	for _, node := range nodes {
-		err := s.findNode(t.Arg.Target, node.Addr.UDPAddr(), t.Depth, ids)
+		err := s.findNode(t.Arg.Target, node.Addr, t.Depth, ids)
 		if err != nil {
 			s.conf.ErrorLog(`fail to send "find_node" query to '%s': %s`,
 				node.Addr.String(), err)

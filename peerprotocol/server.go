@@ -65,9 +65,9 @@ type Config struct {
 	HandleMessage func(pc *PeerConn, msg Message, handler Handler) error
 }
 
-func (c *Config) set(conf ...Config) {
-	if len(conf) > 0 {
-		*c = conf[0]
+func (c *Config) set(conf *Config) {
+	if conf != nil {
+		*c = *conf
 	}
 
 	if c.MaxLength == 0 {
@@ -93,33 +93,35 @@ type Server struct {
 }
 
 // NewServerByListen returns a new Server by listening on the address.
-func NewServerByListen(network, address string, id metainfo.Hash, h Handler,
-	c ...Config) (*Server, error) {
+func NewServerByListen(network, address string, id metainfo.Hash, h Handler, c *Config) (*Server, error) {
 	ln, err := net.Listen(network, address)
 	if err != nil {
 		return nil, err
 	}
-	return NewServer(ln, id, h, c...), nil
+	return NewServer(ln, id, h, c), nil
 }
 
 // NewServer returns a new Server.
-func NewServer(ln net.Listener, id metainfo.Hash, h Handler, c ...Config) *Server {
+func NewServer(ln net.Listener, id metainfo.Hash, h Handler, c *Config) *Server {
 	if id.IsZero() {
 		panic("the peer node id must not be empty")
 	}
 
 	var conf Config
-	conf.set(c...)
+	conf.set(c)
 	return &Server{Listener: ln, ID: id, Handler: h, Config: conf}
 }
 
 // Run starts the peer protocol server.
 func (s *Server) Run() {
-	s.Config.set()
+	s.Config.set(nil)
 	for {
 		conn, err := s.Listener.Accept()
 		if err != nil {
-			s.Config.ErrorLog("fail to accept new connection: %s", err)
+			if !strings.Contains(err.Error(), "closed") {
+				s.Config.ErrorLog("fail to accept new connection: %s", err)
+			}
+			return
 		}
 		go s.handleConn(conn)
 	}

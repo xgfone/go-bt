@@ -44,12 +44,12 @@ func (eb ExtensionBits) String() string {
 }
 
 // Set sets the bit to 1, that's, to set it to be on.
-func (eb ExtensionBits) Set(bit uint) {
+func (eb *ExtensionBits) Set(bit uint) {
 	eb[7-bit/8] |= 1 << (bit % 8)
 }
 
 // Unset sets the bit to 0, that's, to set it to be off.
-func (eb ExtensionBits) Unset(bit uint) {
+func (eb *ExtensionBits) Unset(bit uint) {
 	eb[7-bit/8] &^= 1 << (bit % 8)
 }
 

@@ -155,12 +155,12 @@ func (rt *routingTable) Stop() {
 // AddNode adds the node into the routing table.
 //
 // The returned value:
-//   NodeAdded:           The node is added successfully.
-//   NodeNotAdded:        The node is not added and is discarded.
-//   NodeExistAndUpdated: The node has existed, and its status has been updated.
-//   NodeExistAndChanged: The node has existed, but the address is inconsistent.
-//                        The current node will be discarded.
 //
+//	NodeAdded:           The node is added successfully.
+//	NodeNotAdded:        The node is not added and is discarded.
+//	NodeExistAndUpdated: The node has existed, and its status has been updated.
+//	NodeExistAndChanged: The node has existed, but the address is inconsistent.
+//	                     The current node will be discarded.
 func (rt *routingTable) AddNode(n krpc.Node) (r int) {
 	if n.ID == rt.root { // Don't add itself.
 		return NodeNotAdded
@@ -264,7 +264,7 @@ func (b *bucket) AddNode(n krpc.Node, now time.Time) (status int) {
 				return
 			}
 
-			// // TODO: Should we replace the old one??
+			// // (xgf): Should we replace the old one??
 			// b.UpdateLastChangedTime(now)
 			// copy(b.Nodes[i:], b.Nodes[i+1:])
 			// b.Nodes[len(b.Nodes)-1] = newWrappedNode(b, n, now)
@@ -314,7 +314,7 @@ func (b *bucket) CheckAllNodes(now time.Time) {
 		case nodeStatusGood:
 		case nodeStatusDubious:
 			// Try to send the PING query to the dubious node to check whether it is alive.
-			if err := b.table.s.Ping(node.Node.Addr.UDPAddr()); err != nil {
+			if err := b.table.s.Ping(node.Node.Addr); err != nil {
 				b.table.s.conf.ErrorLog("fail to ping '%s': %s", node.Node.String(), err)
 			}
 		case nodeStatusBad:

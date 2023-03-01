@@ -21,7 +21,7 @@ import (
 	"io"
 	"sort"
 
-	"github.com/xgfone/bt/utils"
+	"github.com/xgfone/bt/internal/helper"
 )
 
 // Predefine some sizes of the pieces.
@@ -69,7 +69,7 @@ func GeneratePieces(r io.Reader, pieceLength int64) (hs Hashes, err error) {
 	buf := make([]byte, pieceLength)
 	for {
 		h := sha1.New()
-		written, err := utils.CopyNBuffer(h, r, pieceLength, buf)
+		written, err := helper.CopyNBuffer(h, r, pieceLength, buf)
 		if written > 0 {
 			hs = append(hs, NewHash(h.Sum(nil)))
 		}
@@ -92,7 +92,7 @@ func writeFiles(w io.Writer, files []File, open func(File) (io.ReadCloser, error
 			return fmt.Errorf("error opening %s: %s", file, err)
 		}
 
-		n, err := utils.CopyNBuffer(w, r, file.Length, buf)
+		n, err := helper.CopyNBuffer(w, r, file.Length, buf)
 		r.Close()
 
 		if n != file.Length {

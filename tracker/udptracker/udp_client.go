@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2020~2023 xgfone
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -29,39 +30,27 @@ import (
 )
 
 // NewClientByDial returns a new Client by dialing.
-func NewClientByDial(network, address string, c ...ClientConfig) (*Client, error) {
+func NewClientByDial(network, address string, id metainfo.Hash) (*Client, error) {
 	conn, err := net.Dial(network, address)
 	if err != nil {
 		return nil, err
 	}
-
-	return NewClient(conn.(*net.UDPConn), c...), nil
+	return NewClient(conn.(*net.UDPConn), id), nil
 }
 
 // NewClient returns a new Client.
-func NewClient(conn *net.UDPConn, c ...ClientConfig) *Client {
-	var conf ClientConfig
-	conf.set(c...)
+func NewClient(conn *net.UDPConn, id metainfo.Hash) *Client {
 	ipv4 := strings.Contains(conn.LocalAddr().String(), ".")
-	return &Client{conn: conn, conf: conf, ipv4: ipv4}
-}
-
-// ClientConfig is used to configure the Client.
-type ClientConfig struct {
-	ID         metainfo.Hash
-	MaxBufSize int // Default: 2048
-}
-
-func (c *ClientConfig) set(conf ...ClientConfig) {
-	if len(conf) > 0 {
-		*c = conf[0]
+	if id.IsZero() {
+		id = metainfo.NewRandomHash()
 	}
 
-	if c.ID.IsZero() {
-		c.ID = metainfo.NewRandomHash()
-	}
-	if c.MaxBufSize <= 0 {
-		c.MaxBufSize = 2048
+	return &Client{
+		MaxBufSize: maxBufSize,
+
+		conn: conn,
+		ipv4: ipv4,
+		id:   id,
 	}
 }
 
@@ -72,12 +61,14 @@ func (c *ClientConfig) set(conf ...ClientConfig) {
 //
 // BEP 15
 type Client struct {
-	ipv4 bool
-	conf ClientConfig
+	MaxBufSize int // Default: 2048
+
+	id   metainfo.Hash
 	conn *net.UDPConn
 	last time.Time
 	cid  uint64
 	tid  uint32
+	ipv4 bool
 }
 
 // Close closes the UDP tracker client.
@@ -140,21 +131,21 @@ func (utc *Client) connect(ctx context.Context) (err error) {
 	}
 
 	data = data[:n]
-	switch binary.BigEndian.Uint32(data[:4]) {
+	switch action := binary.BigEndian.Uint32(data[:4]); action {
 	case ActionConnect:
 	case ActionError:
 		_, reason := utc.parseError(data[4:])
 		return errors.New(reason)
 	default:
-		return errors.New("tracker response not connect action")
+		return fmt.Errorf("tracker response is not connect action: %d", action)
 	}
 
 	if n < 16 {
 		return io.ErrShortBuffer
 	}
 
-	if binary.BigEndian.Uint32(data[4:8]) != tid {
-		return errors.New("invalid transaction id")
+	if _tid := binary.BigEndian.Uint32(data[4:8]); _tid != tid {
+		return fmt.Errorf("expect transaction id %d, but got %d", tid, _tid)
 	}
 
 	utc.cid = binary.BigEndian.Uint64(data[8:16])
@@ -172,8 +163,7 @@ func (utc *Client) getConnectionID(ctx context.Context) (cid uint64, err error) 
 	return
 }
 
-func (utc *Client) announce(ctx context.Context, req AnnounceRequest) (
-	r AnnounceResponse, err error) {
+func (utc *Client) announce(ctx context.Context, req AnnounceRequest) (r AnnounceResponse, err error) {
 	cid, err := utc.getConnectionID(ctx)
 	if err != nil {
 		return
@@ -181,16 +171,21 @@ func (utc *Client) announce(ctx context.Context, req AnnounceRequest) (
 
 	tid := utc.getTranID()
 	buf := bytes.NewBuffer(make([]byte, 0, 110))
-	binary.Write(buf, binary.BigEndian, cid)
-	binary.Write(buf, binary.BigEndian, ActionAnnounce)
-	binary.Write(buf, binary.BigEndian, tid)
+	binary.Write(buf, binary.BigEndian, cid)            // 8: 0  - 8
+	binary.Write(buf, binary.BigEndian, ActionAnnounce) // 4: 8  - 12
+	binary.Write(buf, binary.BigEndian, tid)            // 4: 12 - 16
 	req.EncodeTo(buf)
 	b := buf.Bytes()
 	if err = utc.send(b); err != nil {
 		return
 	}
 
-	data := make([]byte, utc.conf.MaxBufSize)
+	bufSize := utc.MaxBufSize
+	if bufSize <= 0 {
+		bufSize = maxBufSize
+	}
+
+	data := make([]byte, bufSize)
 	n, err := utc.readResp(ctx, data)
 	if err != nil {
 		return
@@ -200,14 +195,14 @@ func (utc *Client) announce(ctx context.Context, req AnnounceRequest) (
 	}
 
 	data = data[:n]
-	switch binary.BigEndian.Uint32(data[:4]) {
+	switch action := binary.BigEndian.Uint32(data[:4]); action {
 	case ActionAnnounce:
 	case ActionError:
 		_, reason := utc.parseError(data[4:])
 		err = errors.New(reason)
 		return
 	default:
-		err = errors.New("tracker response not connect action")
+		err = fmt.Errorf("tracker response is not connect action: %d", action)
 		return
 	}
 
@@ -216,8 +211,8 @@ func (utc *Client) announce(ctx context.Context, req AnnounceRequest) (
 		return
 	}
 
-	if binary.BigEndian.Uint32(data[4:8]) != tid {
-		err = errors.New("invalid transaction id")
+	if _tid := binary.BigEndian.Uint32(data[4:8]); _tid != tid {
+		err = fmt.Errorf("expect transaction id %d, but got %d", tid, _tid)
 		return
 	}
 
@@ -228,19 +223,20 @@ func (utc *Client) announce(ctx context.Context, req AnnounceRequest) (
 // Announce sends a Announce request to the tracker.
 //
 // Notice:
-//   1. if it does not connect to the UDP tracker server, it will connect to it,
-//      then send the ANNOUNCE request.
-//   2. If returning an error, you should retry it.
-//      See http://www.bittorrent.org/beps/bep_0015.html#time-outs
+//  1. if it does not connect to the UDP tracker server, it will connect to it,
+//     then send the ANNOUNCE request.
+//  2. If returning an error, you should retry it.
+//     See http://www.bittorrent.org/beps/bep_0015.html#time-outs
 func (utc *Client) Announce(c context.Context, r AnnounceRequest) (AnnounceResponse, error) {
-	if r.PeerID.IsZero() {
-		r.PeerID = utc.conf.ID
+	if r.InfoHash.IsZero() {
+		panic("infohash is ZERO")
 	}
+
+	r.PeerID = utc.id
 	return utc.announce(c, r)
 }
 
-func (utc *Client) scrape(c context.Context, ihs []metainfo.Hash) (
-	rs []ScrapeResponse, err error) {
+func (utc *Client) scrape(c context.Context, ihs []metainfo.Hash) (rs []ScrapeResponse, err error) {
 	cid, err := utc.getConnectionID(c)
 	if err != nil {
 		return
@@ -248,17 +244,24 @@ func (utc *Client) scrape(c context.Context, ihs []metainfo.Hash) (
 
 	tid := utc.getTranID()
 	buf := bytes.NewBuffer(make([]byte, 0, 16+len(ihs)*20))
-	binary.Write(buf, binary.BigEndian, cid)
-	binary.Write(buf, binary.BigEndian, ActionScrape)
-	binary.Write(buf, binary.BigEndian, tid)
-	for _, h := range ihs {
+	binary.Write(buf, binary.BigEndian, cid)          // 8: 0  - 8
+	binary.Write(buf, binary.BigEndian, ActionScrape) // 4: 8  - 12
+	binary.Write(buf, binary.BigEndian, tid)          // 4: 12 - 16
+
+	for _, h := range ihs { // 20*N: 16 -
 		buf.Write(h[:])
 	}
+
 	if err = utc.send(buf.Bytes()); err != nil {
 		return
 	}
 
-	data := make([]byte, utc.conf.MaxBufSize)
+	bufSize := utc.MaxBufSize
+	if bufSize <= 0 {
+		bufSize = maxBufSize
+	}
+
+	data := make([]byte, bufSize)
 	n, err := utc.readResp(c, data)
 	if err != nil {
 		return
@@ -268,19 +271,19 @@ func (utc *Client) scrape(c context.Context, ihs []metainfo.Hash) (
 	}
 
 	data = data[:n]
-	switch binary.BigEndian.Uint32(data[:4]) {
+	switch action := binary.BigEndian.Uint32(data[:4]); action {
 	case ActionScrape:
 	case ActionError:
 		_, reason := utc.parseError(data[4:])
 		err = errors.New(reason)
 		return
 	default:
-		err = errors.New("tracker response not connect action")
+		err = fmt.Errorf("tracker response is not connect action %d", action)
 		return
 	}
 
-	if binary.BigEndian.Uint32(data[4:8]) != tid {
-		err = errors.New("invalid transaction id")
+	if _tid := binary.BigEndian.Uint32(data[4:8]); _tid != tid {
+		err = fmt.Errorf("expect transaction id %d, but got %d", tid, _tid)
 		return
 	}
 
@@ -299,10 +302,10 @@ func (utc *Client) scrape(c context.Context, ihs []metainfo.Hash) (
 // Scrape sends a Scrape request to the tracker.
 //
 // Notice:
-//   1. if it does not connect to the UDP tracker server, it will connect to it,
-//      then send the ANNOUNCE request.
-//   2. If returning an error, you should retry it.
-//      See http://www.bittorrent.org/beps/bep_0015.html#time-outs
+//  1. if it does not connect to the UDP tracker server, it will connect to it,
+//     then send the ANNOUNCE request.
+//  2. If returning an error, you should retry it.
+//     See http://www.bittorrent.org/beps/bep_0015.html#time-outs
 func (utc *Client) Scrape(c context.Context, hs []metainfo.Hash) ([]ScrapeResponse, error) {
 	return utc.scrape(c, hs)
 }

@@ -25,16 +25,15 @@ const xtPrefix = "urn:btih:"
 // Peers returns the list of the addresses of the peers.
 //
 // See BEP 9
-func (m Magnet) Peers() (peers []HostAddress, err error) {
+func (m Magnet) Peers() (peers []HostAddr, err error) {
 	vs := m.Params["x.pe"]
-	peers = make([]HostAddress, 0, len(vs))
+	peers = make([]HostAddr, 0, len(vs))
 	for _, v := range vs {
 		if v != "" {
-			var addr HostAddress
-			if err = addr.FromString(v); err != nil {
-				return
+			addr, err := ParseHostAddr(v)
+			if err != nil {
+				return nil, err
 			}
-
 			peers = append(peers, addr)
 		}
 	}

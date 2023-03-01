@@ -335,7 +335,9 @@ func (m Message) Encode(buf *bytes.Buffer) (err error) {
 	if !m.Keepalive {
 		if err = buf.WriteByte(byte(m.Type)); err != nil {
 			return
-		} else if err = m.marshalBinaryType(buf); err != nil {
+		}
+
+		if err = m.marshalBinaryType(buf); err != nil {
 			return
 		}
 
@@ -376,7 +378,7 @@ func (m Message) marshalBinaryType(buf *bytes.Buffer) (err error) {
 		}
 		_, err = buf.Write(m.Piece)
 	case MTypeExtended:
-		if err = buf.WriteByte(byte(m.ExtendedID)); err != nil {
+		if err = buf.WriteByte(byte(m.ExtendedID)); err == nil {
 			_, err = buf.Write(m.ExtendedPayload)
 		}
 	case MTypePort:

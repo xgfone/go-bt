@@ -17,6 +17,8 @@ package dht
 import (
 	"sync"
 	"time"
+
+	"github.com/xgfone/bt/krpc"
 )
 
 // Blacklist is used to manage the ip blacklist.
@@ -24,25 +26,24 @@ import (
 // Notice: The implementation should clear the address existed for long time.
 type Blacklist interface {
 	// In reports whether the address, ip and port, is in the blacklist.
-	In(ip string, port int) bool
+	In(krpc.Addr) bool
 
 	// If port is equal to 0, it should ignore port and only use ip when matching.
-	Add(ip string, port int)
+	Add(krpc.Addr)
 
 	// If port is equal to 0, it should delete the address by only the ip.
-	Del(ip string, port int)
+	Del(krpc.Addr)
 
-	// Close is used to notice the implementation to release the underlying
-	// resource.
+	// Close is used to notice the implementation to release the underlying resource.
 	Close()
 }
 
 type noopBlacklist struct{}
 
-func (nbl noopBlacklist) In(ip string, port int) bool { return false }
-func (nbl noopBlacklist) Add(ip string, port int)     {}
-func (nbl noopBlacklist) Del(ip string, port int)     {}
-func (nbl noopBlacklist) Close()                      {}
+func (nbl noopBlacklist) In(krpc.Addr) bool { return false }
+func (nbl noopBlacklist) Add(krpc.Addr)     {}
+func (nbl noopBlacklist) Del(krpc.Addr)     {}
+func (nbl noopBlacklist) Close()            {}
 
 // NewNoopBlacklist returns a no-op Blacklist.
 func NewNoopBlacklist() Blacklist { return noopBlacklist{} }
@@ -57,14 +58,14 @@ type logBlacklist struct {
 	logf func(string, ...interface{})
 }
 
-func (dbl logBlacklist) Add(ip string, port int) {
-	dbl.logf("add the blacklist: ip=%s, port=%d", ip, port)
-	dbl.Blacklist.Add(ip, port)
+func (l logBlacklist) Add(addr krpc.Addr) {
+	l.logf("add the addr '%s' into the blacklist", addr.String())
+	l.Blacklist.Add(addr)
 }
 
-func (dbl logBlacklist) Del(ip string, port int) {
-	dbl.logf("delete the blacklist: ip=%s, port=%d", ip, port)
-	dbl.Blacklist.Del(ip, port)
+func (l logBlacklist) Del(addr krpc.Addr) {
+	l.logf("delete the addr '%s' from the blacklist", addr.String())
+	l.Blacklist.Del(addr)
 }
 
 /// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -85,7 +86,7 @@ func NewMemoryBlacklist(maxnum int, duration time.Duration) Blacklist {
 type wrappedPort struct {
 	Time   time.Time
 	Enable bool
-	Ports  map[int]struct{}
+	Ports  map[uint16]struct{}
 }
 
 type blacklist struct {
@@ -123,11 +124,11 @@ func (bl *blacklist) Close() {
 }
 
 // In reports whether the address, ip and port, is in the blacklist.
-func (bl *blacklist) In(ip string, port int) (yes bool) {
+func (bl *blacklist) In(addr krpc.Addr) (yes bool) {
 	bl.lock.RLock()
-	if wp, ok := bl.ips[ip]; ok {
+	if wp, ok := bl.ips[addr.IP.String()]; ok {
 		if wp.Enable {
-			_, yes = wp.Ports[port]
+			_, yes = wp.Ports[addr.Port]
 		} else {
 			yes = true
 		}
@@ -136,7 +137,8 @@ func (bl *blacklist) In(ip string, port int) (yes bool) {
 	return
 }
 
-func (bl *blacklist) Add(ip string, port int) {
+func (bl *blacklist) Add(addr krpc.Addr) {
+	ip := addr.IP.String()
 	bl.lock.Lock()
 	wp, ok := bl.ips[ip]
 	if !ok {
@@ -149,30 +151,31 @@ func (bl *blacklist) Add(ip string, port int) {
 		bl.ips[ip] = wp
 	}
 
-	if port < 1 {
+	if addr.Port < 1 {
 		wp.Enable = false
 		wp.Ports = nil
 	} else if wp.Ports == nil {
-		wp.Ports = map[int]struct{}{port: struct{}{}}
+		wp.Ports = map[uint16]struct{}{addr.Port: {}}
 	} else {
-		wp.Ports[port] = struct{}{}
+		wp.Ports[addr.Port] = struct{}{}
 	}
 
 	wp.Time = time.Now()
 	bl.lock.Unlock()
 }
 
-func (bl *blacklist) Del(ip string, port int) {
+func (bl *blacklist) Del(addr krpc.Addr) {
+	ip := addr.IP.String()
 	bl.lock.Lock()
 	if wp, ok := bl.ips[ip]; ok {
-		if port < 1 {
+		if addr.Port < 1 {
 			delete(bl.ips, ip)
 		} else if wp.Enable {
 			switch len(wp.Ports) {
 			case 0, 1:
 				delete(bl.ips, ip)
 			default:
-				delete(wp.Ports, port)
+				delete(wp.Ports, addr.Port)
 				wp.Time = time.Now()
 			}
 		}

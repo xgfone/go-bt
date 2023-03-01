@@ -14,9 +14,7 @@
 
 package metainfo
 
-import (
-	"path/filepath"
-)
+import "path/filepath"
 
 // File represents a file in the multi-file case.
 type File struct {

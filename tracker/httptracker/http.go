@@ -101,7 +101,7 @@ type AnnounceRequest struct {
 
 // ToQuery converts the Request to URL Query.
 func (r AnnounceRequest) ToQuery() (vs url.Values) {
-	vs = make(url.Values, 9)
+	vs = make(url.Values, 10)
 	vs.Set("info_hash", r.InfoHash.BytesString())
 	vs.Set("peer_id", r.PeerID.BytesString())
 	vs.Set("uploaded", strconv.FormatInt(r.Uploaded, 10))
@@ -278,11 +278,15 @@ type Client struct {
 //
 // scrapeURL may be empty, which will replace the "announce" in announceURL
 // with "scrape" to generate the scrapeURL.
-func NewClient(announceURL, scrapeURL string) *Client {
+func NewClient(id metainfo.Hash, announceURL, scrapeURL string) *Client {
 	if scrapeURL == "" {
 		scrapeURL = strings.Replace(announceURL, "announce", "scrape", -1)
 	}
-	id := metainfo.NewRandomHash()
+
+	if id.IsZero() {
+		id = metainfo.NewRandomHash()
+	}
+
 	return &Client{AnnounceURL: announceURL, ScrapeURL: scrapeURL, ID: id}
 }
 
@@ -310,7 +314,7 @@ func (t *Client) send(c context.Context, u string, vs url.Values, r interface{})
 		resp, err = t.Client.Do(req)
 	}
 
-	if resp.Body != nil {
+	if resp != nil {
 		defer resp.Body.Close()
 	}
 
@@ -323,14 +327,11 @@ func (t *Client) send(c context.Context, u string, vs url.Values, r interface{})
 
 // Announce sends a Announce request to the tracker.
 func (t *Client) Announce(c context.Context, req AnnounceRequest) (resp AnnounceResponse, err error) {
-	if req.PeerID.IsZero() {
-		if t.ID.IsZero() {
-			req.PeerID = metainfo.NewRandomHash()
-		} else {
-			req.PeerID = t.ID
-		}
+	if req.InfoHash.IsZero() {
+		panic("infohash is ZERO")
 	}
 
+	req.PeerID = t.ID
 	err = t.send(c, t.AnnounceURL, req.ToQuery(), &resp)
 	return
 }

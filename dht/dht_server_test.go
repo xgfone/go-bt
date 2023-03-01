@@ -17,39 +17,33 @@ package dht
 import (
 	"fmt"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 
+	"github.com/xgfone/bt/internal/helper"
+	"github.com/xgfone/bt/krpc"
 	"github.com/xgfone/bt/metainfo"
 )
 
 type testPeerManager struct {
 	lock  sync.RWMutex
-	peers map[metainfo.Hash][]metainfo.Address
+	peers map[metainfo.Hash][]string
 }
 
 func newTestPeerManager() *testPeerManager {
-	return &testPeerManager{peers: make(map[metainfo.Hash][]metainfo.Address)}
+	return &testPeerManager{peers: make(map[metainfo.Hash][]string)}
 }
 
-func (pm *testPeerManager) AddPeer(infohash metainfo.Hash, addr metainfo.Address) {
+func (pm *testPeerManager) AddPeer(infohash metainfo.Hash, addr string) {
 	pm.lock.Lock()
-	var exist bool
-	for _, orig := range pm.peers[infohash] {
-		if orig.Equal(addr) {
-			exist = true
-			break
-		}
-	}
-	if !exist {
+	defer pm.lock.Unlock()
+
+	if !helper.ContainsString(pm.peers[infohash], addr) {
 		pm.peers[infohash] = append(pm.peers[infohash], addr)
 	}
-	pm.lock.Unlock()
 }
 
-func (pm *testPeerManager) GetPeers(infohash metainfo.Hash, maxnum int,
-	ipv6 bool) (addrs []metainfo.Address) {
+func (pm *testPeerManager) GetPeers(infohash metainfo.Hash, maxnum int, ipv6 bool) (addrs []string) {
 	// We only supports IPv4, so ignore the ipv6 argument.
 	pm.lock.RLock()
 	_addrs := pm.peers[infohash]
@@ -63,13 +57,11 @@ func (pm *testPeerManager) GetPeers(infohash metainfo.Hash, maxnum int,
 	return
 }
 
-func onSearch(infohash string, ip net.IP, port uint16) {
-	addr := net.JoinHostPort(ip.String(), strconv.FormatUint(uint64(port), 10))
-	fmt.Printf("%s is searching %s\n", addr, infohash)
+func onSearch(infohash string, addr krpc.Addr) {
+	fmt.Printf("%s is searching %s\n", addr.String(), infohash)
 }
 
-func onTorrent(infohash string, ip net.IP, port uint16) {
-	addr := net.JoinHostPort(ip.String(), strconv.FormatUint(uint64(port), 10))
+func onTorrent(infohash string, addr string) {
 	fmt.Printf("%s has downloaded %s\n", addr, infohash)
 }
 
@@ -77,7 +69,7 @@ func newDHTServer(id metainfo.Hash, addr string, pm PeerManager) (s *Server, err
 	conn, err := net.ListenPacket("udp", addr)
 	if err == nil {
 		c := Config{ID: id, PeerManager: pm, OnSearch: onSearch, OnTorrent: onTorrent}
-		s = NewServer(conn, c)
+		s = NewServer(conn, &c)
 	}
 	return
 }
@@ -140,7 +132,7 @@ func ExampleServer() {
 			fmt.Printf("no peers for %s\n", infohash)
 		} else {
 			for _, peer := range r.Peers {
-				fmt.Printf("%s: %s\n", infohash, peer.String())
+				fmt.Printf("%s: %s\n", infohash, peer)
 			}
 		}
 	})
@@ -149,7 +141,7 @@ func ExampleServer() {
 	time.Sleep(time.Second * 2)
 
 	// Add the peer to let the DHT server1 has the peer.
-	pm.AddPeer(infohash, metainfo.NewAddress(net.ParseIP("127.0.0.1"), 9001))
+	pm.AddPeer(infohash, "127.0.0.1:9001")
 
 	// Search the torrent infohash again, but from DHT server2,
 	// which will search the DHT server1 recursively.
@@ -158,7 +150,7 @@ func ExampleServer() {
 			fmt.Printf("no peers for %s\n", infohash)
 		} else {
 			for _, peer := range r.Peers {
-				fmt.Printf("%s: %s\n", infohash, peer.String())
+				fmt.Printf("%s: %s\n", infohash, peer)
 			}
 		}
 	})

@@ -15,16 +15,16 @@
 package dht
 
 import (
-	"net"
 	"sync"
 	"time"
 
-	"github.com/xgfone/bt/utils"
+	"github.com/xgfone/bt/internal/helper"
+	"github.com/xgfone/bt/krpc"
 )
 
 // TokenManager is used to manage and validate the token.
 //
-// TODO: Should we allocate the different token for each node??
+// (xgf): Should we allocate the different token for each node??
 type tokenManager struct {
 	lock  sync.RWMutex
 	last  string
@@ -34,12 +34,12 @@ type tokenManager struct {
 }
 
 func newTokenManager() *tokenManager {
-	token := utils.RandomString(8)
+	token := helper.RandomString(8)
 	return &tokenManager{last: token, new: token, exit: make(chan struct{})}
 }
 
 func (tm *tokenManager) updateToken() {
-	token := utils.RandomString(8)
+	token := helper.RandomString(8)
 	tm.lock.Lock()
 	tm.last, tm.new = tm.new, token
 	tm.lock.Unlock()
@@ -83,7 +83,7 @@ func (tm *tokenManager) Stop() {
 }
 
 // Token allocates a token for a node addr and returns the token.
-func (tm *tokenManager) Token(addr *net.UDPAddr) (token string) {
+func (tm *tokenManager) Token(addr krpc.Addr) (token string) {
 	addrs := addr.String()
 	tm.lock.RLock()
 	token = tm.new
@@ -94,7 +94,7 @@ func (tm *tokenManager) Token(addr *net.UDPAddr) (token string) {
 
 // Check checks whether the token associated with the node addr is valid,
 // that's, it's not expired.
-func (tm *tokenManager) Check(addr *net.UDPAddr, token string) (ok bool) {
+func (tm *tokenManager) Check(addr krpc.Addr, token string) (ok bool) {
 	tm.lock.RLock()
 	last, new := tm.last, tm.new
 	tm.lock.RUnlock()

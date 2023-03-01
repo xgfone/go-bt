@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2020~2023 xgfone
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,8 +29,7 @@ import (
 type testHandler struct{}
 
 func (testHandler) OnConnect(raddr *net.UDPAddr) (err error) { return }
-func (testHandler) OnAnnounce(raddr *net.UDPAddr, req udptracker.AnnounceRequest) (
-	r udptracker.AnnounceResponse, err error) {
+func (testHandler) OnAnnounce(raddr *net.UDPAddr, req udptracker.AnnounceRequest) (r udptracker.AnnounceResponse, err error) {
 	if req.Port != 80 {
 		err = errors.New("port is not 80")
 		return
@@ -51,12 +50,11 @@ func (testHandler) OnAnnounce(raddr *net.UDPAddr, req udptracker.AnnounceRequest
 		Interval:  1,
 		Leechers:  2,
 		Seeders:   3,
-		Addresses: []metainfo.Address{{IP: net.ParseIP("127.0.0.1"), Port: 8000}},
+		Addresses: []metainfo.CompactAddr{{IP: net.ParseIP("127.0.0.1"), Port: 8000}},
 	}
 	return
 }
-func (testHandler) OnScrap(raddr *net.UDPAddr, infohashes []metainfo.Hash) (
-	rs []udptracker.ScrapeResponse, err error) {
+func (testHandler) OnScrap(raddr *net.UDPAddr, infohashes []metainfo.Hash) (rs []udptracker.ScrapeResponse, err error) {
 	rs = make([]udptracker.ScrapeResponse, len(infohashes))
 	for i := range infohashes {
 		rs[i] = udptracker.ScrapeResponse{
@@ -74,7 +72,7 @@ func ExampleClient() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	server := udptracker.NewServer(sconn, testHandler{})
+	server := udptracker.NewServer(sconn, testHandler{}, 0)
 	defer server.Close()
 	go server.Run()
 
@@ -82,14 +80,14 @@ func ExampleClient() {
 	time.Sleep(time.Second)
 
 	// Create a client and dial to the UDP tracker server.
-	client, err := NewClient("udp://127.0.0.1:8000/path?a=1&b=2")
+	client, err := NewClient("udp://127.0.0.1:8000/path?a=1&b=2", metainfo.Hash{}, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Send the ANNOUNCE request to the UDP tracker server,
 	// and get the ANNOUNCE response.
-	req := AnnounceRequest{IP: net.ParseIP("127.0.0.1"), Port: 80}
+	req := AnnounceRequest{InfoHash: metainfo.NewRandomHash(), IP: net.ParseIP("127.0.0.1"), Port: 80}
 	resp, err := client.Announce(context.Background(), req)
 	if err != nil {
 		log.Fatal(err)
@@ -99,7 +97,7 @@ func ExampleClient() {
 	fmt.Printf("Leechers: %d\n", resp.Leechers)
 	fmt.Printf("Seeders: %d\n", resp.Seeders)
 	for i, addr := range resp.Addresses {
-		fmt.Printf("Address[%d].IP: %s\n", i, addr.IP.String())
+		fmt.Printf("Address[%d].IP: %s\n", i, addr.Host)
 		fmt.Printf("Address[%d].Port: %d\n", i, addr.Port)
 	}
 

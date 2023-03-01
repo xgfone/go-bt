@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2020~2023 xgfone
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@ import (
 	"github.com/xgfone/bt/metainfo"
 )
 
+const maxBufSize = 2048
+
 // ProtocolID is magic constant for the udp tracker connection.
 //
 // BEP 15
@@ -55,16 +57,15 @@ type AnnounceRequest struct {
 	Uploaded   int64
 	Event      uint32
 
-	IP      net.IP
 	Key     int32
-	NumWant int32 // -1 for default
+	NumWant int32 // -1 for default and use -1 instead if 0
 	Port    uint16
 
 	Exts []Extension // BEP 41
 }
 
 // DecodeFrom decodes the request from b.
-func (r *AnnounceRequest) DecodeFrom(b []byte, ipv4 bool) {
+func (r *AnnounceRequest) DecodeFrom(b []byte) {
 	r.InfoHash = metainfo.NewHash(b[0:20])
 	r.PeerID = metainfo.NewHash(b[20:40])
 	r.Downloaded = int64(binary.BigEndian.Uint64(b[40:48]))
@@ -72,21 +73,13 @@ func (r *AnnounceRequest) DecodeFrom(b []byte, ipv4 bool) {
 	r.Uploaded = int64(binary.BigEndian.Uint64(b[56:64]))
 	r.Event = binary.BigEndian.Uint32(b[64:68])
 
-	if ipv4 {
-		r.IP = make(net.IP, net.IPv4len)
-		copy(r.IP, b[68:72])
-		b = b[72:]
-	} else {
-		r.IP = make(net.IP, net.IPv6len)
-		copy(r.IP, b[68:84])
-		b = b[84:]
-	}
+	// ignore b[68:72] // 4 bytes
 
-	r.Key = int32(binary.BigEndian.Uint32(b[0:4]))
-	r.NumWant = int32(binary.BigEndian.Uint32(b[4:8]))
-	r.Port = binary.BigEndian.Uint16(b[8:10])
+	r.Key = int32(binary.BigEndian.Uint32(b[72:76]))
+	r.NumWant = int32(binary.BigEndian.Uint32(b[76:80]))
+	r.Port = binary.BigEndian.Uint16(b[80:82])
 
-	b = b[10:]
+	b = b[82:]
 	for len(b) > 0 {
 		var ext Extension
 		parsed := ext.DecodeFrom(b)
@@ -97,26 +90,25 @@ func (r *AnnounceRequest) DecodeFrom(b []byte, ipv4 bool) {
 
 // EncodeTo encodes the request to buf.
 func (r AnnounceRequest) EncodeTo(buf *bytes.Buffer) {
-	buf.Grow(82)
-	buf.Write(r.InfoHash[:])
-	buf.Write(r.PeerID[:])
-
-	binary.Write(buf, binary.BigEndian, r.Downloaded)
-	binary.Write(buf, binary.BigEndian, r.Left)
-	binary.Write(buf, binary.BigEndian, r.Uploaded)
-	binary.Write(buf, binary.BigEndian, r.Event)
-
-	if ip := r.IP.To4(); ip != nil {
-		buf.Write(ip[:])
-	} else {
-		buf.Write(r.IP[:])
+	if r.NumWant <= 0 {
+		r.NumWant = -1
 	}
 
-	binary.Write(buf, binary.BigEndian, r.Key)
-	binary.Write(buf, binary.BigEndian, r.NumWant)
-	binary.Write(buf, binary.BigEndian, r.Port)
+	buf.Grow(82)
+	buf.Write(r.InfoHash[:]) // 20: 16 - 36
+	buf.Write(r.PeerID[:])   // 20: 36 - 56
 
-	for _, ext := range r.Exts {
+	binary.Write(buf, binary.BigEndian, r.Downloaded) // 8: 56 - 64
+	binary.Write(buf, binary.BigEndian, r.Left)       // 8: 64 - 72
+	binary.Write(buf, binary.BigEndian, r.Uploaded)   // 8: 72 - 80
+	binary.Write(buf, binary.BigEndian, r.Event)      // 4: 80 - 84
+	binary.Write(buf, binary.BigEndian, uint32(0))    // 4: 84 - 88
+
+	binary.Write(buf, binary.BigEndian, r.Key)     // 4: 88 - 92
+	binary.Write(buf, binary.BigEndian, r.NumWant) // 4: 92 - 96
+	binary.Write(buf, binary.BigEndian, r.Port)    // 2: 96 - 98
+
+	for _, ext := range r.Exts { // N: 98 -
 		ext.EncodeTo(buf)
 	}
 }
@@ -128,32 +120,35 @@ type AnnounceResponse struct {
 	Interval  uint32
 	Leechers  uint32
 	Seeders   uint32
-	Addresses []metainfo.Address
+	Addresses []metainfo.CompactAddr
 }
 
 // EncodeTo encodes the response to buf.
-func (r AnnounceResponse) EncodeTo(buf *bytes.Buffer) {
+func (r AnnounceResponse) EncodeTo(buf *bytes.Buffer, ipv4 bool) {
 	buf.Grow(12 + len(r.Addresses)*18)
 	binary.Write(buf, binary.BigEndian, r.Interval)
 	binary.Write(buf, binary.BigEndian, r.Leechers)
 	binary.Write(buf, binary.BigEndian, r.Seeders)
-	for _, addr := range r.Addresses {
-		if ip := addr.IP.To4(); ip != nil {
-			buf.Write(ip[:])
+	for i, addr := range r.Addresses {
+		if ipv4 {
+			addr.IP = addr.IP.To4()
 		} else {
-			buf.Write(addr.IP[:])
+			addr.IP = addr.IP.To16()
 		}
-		binary.Write(buf, binary.BigEndian, addr.Port)
+		if len(addr.IP) == 0 {
+			panic(fmt.Errorf("invalid ip '%s'", r.Addresses[i].IP.String()))
+		}
+		addr.WriteBinary(buf)
 	}
 }
 
 // DecodeFrom decodes the response from b.
 func (r *AnnounceResponse) DecodeFrom(b []byte, ipv4 bool) {
-	r.Interval = binary.BigEndian.Uint32(b[:4])
-	r.Leechers = binary.BigEndian.Uint32(b[4:8])
-	r.Seeders = binary.BigEndian.Uint32(b[8:12])
+	r.Interval = binary.BigEndian.Uint32(b[:4])  // 4: 8 - 12
+	r.Leechers = binary.BigEndian.Uint32(b[4:8]) // 4: 12 - 16
+	r.Seeders = binary.BigEndian.Uint32(b[8:12]) // 4: 16 - 20
 
-	b = b[12:]
+	b = b[12:] // N*(6|18): 20 -
 	iplen := net.IPv6len
 	if ipv4 {
 		iplen = net.IPv4len
@@ -161,12 +156,13 @@ func (r *AnnounceResponse) DecodeFrom(b []byte, ipv4 bool) {
 
 	_len := len(b)
 	step := iplen + 2
-	r.Addresses = make([]metainfo.Address, 0, _len/step)
+	r.Addresses = make([]metainfo.CompactAddr, 0, _len/step)
 	for i := step; i <= _len; i += step {
-		ip := make(net.IP, iplen)
-		copy(ip, b[i-step:i-2])
-		port := binary.BigEndian.Uint16(b[i-2 : i])
-		r.Addresses = append(r.Addresses, metainfo.Address{IP: ip, Port: port})
+		var addr metainfo.CompactAddr
+		if err := addr.UnmarshalBinary(b[i-step : i]); err != nil {
+			panic(err)
+		}
+		r.Addresses = append(r.Addresses, addr)
 	}
 }
 

@@ -15,8 +15,6 @@
 package httptracker
 
 import (
-	"bytes"
-	"encoding/binary"
 	"errors"
 	"net"
 
@@ -24,34 +22,19 @@ import (
 	"github.com/xgfone/bt/metainfo"
 )
 
-var errInvalidPeer = errors.New("invalid peer information format")
+var errInvalidPeer = errors.New("invalid bt peer information format")
 
 // Peer is a tracker peer.
 type Peer struct {
-	// ID is the peer's self-selected ID.
-	ID string `bencode:"peer id"` // BEP 3
-
-	// IP is the IP address or dns name.
-	IP   string `bencode:"ip"`   // BEP 3
-	Port uint16 `bencode:"port"` // BEP 3
+	ID   string `bencode:"peer id"` // BEP 3, the peer's self-selected ID.
+	IP   string `bencode:"ip"`      // BEP 3, an IP address or dns name.
+	Port uint16 `bencode:"port"`    // BEP 3
 }
 
-// Addresses returns the list of the addresses that the peer listens on.
-func (p Peer) Addresses() (addrs []metainfo.Address, err error) {
-	if ip := net.ParseIP(p.IP); len(ip) != 0 {
-		return []metainfo.Address{{IP: ip, Port: p.Port}}, nil
-	}
-
-	ips, err := net.LookupIP(p.IP)
-	if _len := len(ips); err == nil && len(ips) != 0 {
-		addrs = make([]metainfo.Address, _len)
-		for i, ip := range ips {
-			addrs[i] = metainfo.Address{IP: ip, Port: p.Port}
-		}
-	}
-
-	return
-}
+var (
+	_ bencode.Marshaler   = new(Peers)
+	_ bencode.Unmarshaler = new(Peers)
+)
 
 // Peers is a set of the peers.
 type Peers []Peer
@@ -65,21 +48,17 @@ func (ps *Peers) UnmarshalBencode(b []byte) (err error) {
 
 	switch vs := v.(type) {
 	case string: // BEP 23
-		_len := len(vs)
-		if _len%6 != 0 {
-			return metainfo.ErrInvalidAddr
+		var addrs metainfo.CompactIPv4Addrs
+		if err = addrs.UnmarshalBinary([]byte(vs)); err != nil {
+			return err
 		}
 
-		peers := make(Peers, 0, _len/6)
-		for i := 0; i < _len; i += 6 {
-			var addr metainfo.Address
-			if err = addr.UnmarshalBinary([]byte(vs[i : i+6])); err != nil {
-				return
-			}
-			peers = append(peers, Peer{IP: addr.IP.String(), Port: addr.Port})
+		peers := make(Peers, len(addrs))
+		for i, addr := range addrs {
+			peers[i] = Peer{IP: addr.IP.String(), Port: addr.Port}
 		}
-
 		*ps = peers
+
 	case []interface{}: // BEP 3
 		peers := make(Peers, len(vs))
 		for i, p := range vs {
@@ -106,6 +85,7 @@ func (ps *Peers) UnmarshalBencode(b []byte) (err error) {
 			peers[i] = Peer{ID: pid, IP: ip, Port: uint16(port)}
 		}
 		*ps = peers
+
 	default:
 		return errInvalidPeer
 	}
@@ -114,37 +94,31 @@ func (ps *Peers) UnmarshalBencode(b []byte) (err error) {
 
 // MarshalBencode implements the interface bencode.Marshaler.
 func (ps Peers) MarshalBencode() (b []byte, err error) {
-	for _, p := range ps {
-		if p.ID == "" {
-			return ps.marshalCompactBencode() // BEP 23
-		}
+	// BEP 23
+	if b, err = ps.marshalCompactBencode(); err == nil {
+		return
 	}
 
 	// BEP 3
-	buf := bytes.NewBuffer(make([]byte, 0, 64*len(ps)))
-	buf.WriteByte('l')
-	for _, p := range ps {
-		if err = bencode.NewEncoder(buf).Encode(p); err != nil {
-			return
-		}
-	}
-	buf.WriteByte('e')
-	b = buf.Bytes()
-	return
+	return bencode.EncodeBytes([]Peer(ps))
 }
 
 func (ps Peers) marshalCompactBencode() (b []byte, err error) {
-	buf := bytes.NewBuffer(make([]byte, 0, 6*len(ps)))
-	for _, peer := range ps {
-		ip := net.ParseIP(peer.IP).To4()
-		if len(ip) == 0 {
+	addrs := make(metainfo.CompactIPv4Addrs, len(ps))
+	for i, p := range ps {
+		ip := net.ParseIP(p.IP).To4()
+		if ip == nil {
 			return nil, errInvalidPeer
 		}
-		buf.Write(ip[:])
-		binary.Write(buf, binary.BigEndian, peer.Port)
+		addrs[i] = metainfo.CompactAddr{IP: ip, Port: p.Port}
 	}
-	return bencode.EncodeBytes(buf.Bytes())
+	return addrs.MarshalBencode()
 }
+
+var (
+	_ bencode.Marshaler   = new(Peers6)
+	_ bencode.Unmarshaler = new(Peers6)
+)
 
 // Peers6 is a set of the peers for IPv6 in the compact case.
 //
@@ -158,35 +132,29 @@ func (ps *Peers6) UnmarshalBencode(b []byte) (err error) {
 		return
 	}
 
-	_len := len(s)
-	if _len%18 != 0 {
-		return metainfo.ErrInvalidAddr
+	var addrs metainfo.CompactIPv6Addrs
+	if err = addrs.UnmarshalBinary([]byte(s)); err != nil {
+		return err
 	}
 
-	peers := make(Peers6, 0, _len/18)
-	for i := 0; i < _len; i += 18 {
-		var addr metainfo.Address
-		if err = addr.UnmarshalBinary([]byte(s[i : i+18])); err != nil {
-			return
-		}
-		peers = append(peers, Peer{IP: addr.IP.String(), Port: addr.Port})
+	peers := make(Peers6, len(addrs))
+	for i, addr := range addrs {
+		peers[i] = Peer{IP: addr.IP.String(), Port: addr.Port}
 	}
-
 	*ps = peers
+
 	return
 }
 
 // MarshalBencode implements the interface bencode.Marshaler.
 func (ps Peers6) MarshalBencode() (b []byte, err error) {
-	buf := bytes.NewBuffer(make([]byte, 0, 18*len(ps)))
-	for _, peer := range ps {
-		ip := net.ParseIP(peer.IP).To16()
-		if len(ip) == 0 {
+	addrs := make(metainfo.CompactIPv6Addrs, len(ps))
+	for i, p := range ps {
+		ip := net.ParseIP(p.IP)
+		if ip == nil {
 			return nil, errInvalidPeer
 		}
-
-		buf.Write(ip[:])
-		binary.Write(buf, binary.BigEndian, peer.Port)
+		addrs[i] = metainfo.CompactAddr{IP: ip, Port: p.Port}
 	}
-	return bencode.EncodeBytes(buf.Bytes())
+	return addrs.MarshalBencode()
 }

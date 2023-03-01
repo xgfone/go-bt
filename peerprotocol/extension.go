@@ -86,7 +86,7 @@ type ExtendedHandshakeMsg struct {
 	// M is the type of map[ExtendedMessageName]ExtendedMessageID.
 	M    map[string]uint8 `bencode:"m"`              // BEP 10
 	V    string           `bencode:"v,omitempty"`    // BEP 10
-	Reqq int              `bencode:"reqq,omitempty"` // BEP 10
+	Reqq uint64           `bencode:"reqq,omitempty"` // BEP 10. The default in in libtorrent is 250.
 
 	// Port is the local client port, which is redundant and no need
 	// for the receiving side of the connection to send this.
@@ -95,7 +95,7 @@ type ExtendedHandshakeMsg struct {
 	IPv4   CompactIP `bencode:"ipv4,omitempty"`   // BEP 10
 	YourIP CompactIP `bencode:"yourip,omitempty"` // BEP 10
 
-	MetadataSize int `bencode:"metadata_size,omitempty"` // BEP 9
+	MetadataSize uint64 `bencode:"metadata_size,omitempty"` // BEP 9
 }
 
 // Decode decodes the extended handshake message from b.
@@ -118,7 +118,7 @@ type UtMetadataExtendedMsg struct {
 	Piece   int   `bencode:"piece"`    // BEP 9
 
 	// They are only used by "data" type
-	TotalSize int    `bencode:"total_size,omitempty"` // BEP 9
+	TotalSize uint64 `bencode:"total_size,omitempty"` // BEP 9
 	Data      []byte `bencode:"-"`
 }
 
@@ -139,10 +139,9 @@ func (um UtMetadataExtendedMsg) EncodeToPayload(buf *bytes.Buffer) (err error) {
 
 // EncodeToBytes is equal to
 //
-//   buf := new(bytes.Buffer)
-//   err = um.EncodeToPayload(buf)
-//   return buf.Bytes(), err
-//
+//	buf := new(bytes.Buffer)
+//	err = um.EncodeToPayload(buf)
+//	return buf.Bytes(), err
 func (um UtMetadataExtendedMsg) EncodeToBytes() (b []byte, err error) {
 	buf := bytes.NewBuffer(make([]byte, 0, 128))
 	if err = um.EncodeToPayload(buf); err == nil {

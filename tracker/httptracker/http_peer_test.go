@@ -21,8 +21,8 @@ import (
 
 func TestPeers(t *testing.T) {
 	peers := Peers{
-		{ID: "123", IP: "1.1.1.1", Port: 80},
-		{ID: "456", IP: "2.2.2.2", Port: 81},
+		{IP: "1.1.1.1", Port: 80},
+		{IP: "2.2.2.2", Port: 81},
 	}
 
 	b, err := peers.MarshalBencode()
@@ -71,5 +71,6 @@ func TestPeers6(t *testing.T) {
 		t.Fatal(err)
 	} else if !reflect.DeepEqual(ps, peers) {
 		t.Errorf("%v != %v", ps, peers)
+		t.Error(string(b))
 	}
 }

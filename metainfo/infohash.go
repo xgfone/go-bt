@@ -145,10 +145,12 @@ func (h *Hash) FromString(s string) (err error) {
 			copy(h[:], bs)
 		}
 	default:
-		err = fmt.Errorf("hash string has bad length: %d", len(s))
+		hasher := sha1.New()
+		hasher.Write([]byte(s))
+		copy(h[:], hasher.Sum(nil))
 	}
 
-	return nil
+	return
 }
 
 // FromHexString resets the info hash from the hex string.

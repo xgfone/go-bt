@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2020~2023 xgfone
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,8 +28,7 @@ import (
 type testHandler struct{}
 
 func (testHandler) OnConnect(raddr *net.UDPAddr) (err error) { return }
-func (testHandler) OnAnnounce(raddr *net.UDPAddr, req AnnounceRequest) (
-	r AnnounceResponse, err error) {
+func (testHandler) OnAnnounce(raddr *net.UDPAddr, req AnnounceRequest) (r AnnounceResponse, err error) {
 	if req.Port != 80 {
 		err = errors.New("port is not 80")
 		return
@@ -50,12 +49,11 @@ func (testHandler) OnAnnounce(raddr *net.UDPAddr, req AnnounceRequest) (
 		Interval:  1,
 		Leechers:  2,
 		Seeders:   3,
-		Addresses: []metainfo.Address{{IP: net.ParseIP("127.0.0.1"), Port: 8001}},
+		Addresses: []metainfo.CompactAddr{{IP: net.ParseIP("127.0.0.1"), Port: 8001}},
 	}
 	return
 }
-func (testHandler) OnScrap(raddr *net.UDPAddr, infohashes []metainfo.Hash) (
-	rs []ScrapeResponse, err error) {
+func (testHandler) OnScrap(raddr *net.UDPAddr, infohashes []metainfo.Hash) (rs []ScrapeResponse, err error) {
 	rs = make([]ScrapeResponse, len(infohashes))
 	for i := range infohashes {
 		rs[i] = ScrapeResponse{
@@ -73,7 +71,7 @@ func ExampleClient() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	server := NewServer(sconn, testHandler{})
+	server := NewServer(sconn, testHandler{}, 0)
 	defer server.Close()
 	go server.Run()
 
@@ -81,7 +79,7 @@ func ExampleClient() {
 	time.Sleep(time.Second)
 
 	// Create a client and dial to the UDP tracker server.
-	client, err := NewClientByDial("udp4", "127.0.0.1:8001")
+	client, err := NewClientByDial("udp4", "127.0.0.1:8001", metainfo.Hash{})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -89,7 +87,7 @@ func ExampleClient() {
 	// Send the ANNOUNCE request to the UDP tracker server,
 	// and get the ANNOUNCE response.
 	exts := []Extension{NewURLData([]byte("data")), NewNop()}
-	req := AnnounceRequest{IP: net.ParseIP("127.0.0.1"), Port: 80, Exts: exts}
+	req := AnnounceRequest{InfoHash: metainfo.NewRandomHash(), Port: 80, Exts: exts}
 	resp, err := client.Announce(context.Background(), req)
 	if err != nil {
 		log.Fatal(err)

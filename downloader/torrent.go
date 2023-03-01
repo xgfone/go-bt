@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2020~2023 xgfone
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,9 +35,9 @@ const BlockSize = 16384 // 16KiB.
 
 // Request is used to send a download request.
 type request struct {
-	Host     string
-	Port     uint16
-	PeerID   metainfo.Hash
+	Host string
+	Port uint16
+	// PeerID   metainfo.Hash
 	InfoHash metainfo.Hash
 }
 
@@ -57,6 +57,11 @@ type TorrentDownloaderConfig struct {
 	// The default is a random id.
 	ID metainfo.Hash
 
+	// The size of a block of the piece.
+	//
+	// Default: 16384
+	BlockSize uint64
+
 	// WorkerNum is the number of the worker downloading the torrent concurrently.
 	//
 	// The default is 128.
@@ -71,11 +76,14 @@ type TorrentDownloaderConfig struct {
 	ErrorLog func(format string, args ...interface{})
 }
 
-func (c *TorrentDownloaderConfig) set(conf ...TorrentDownloaderConfig) {
-	if len(conf) > 0 {
-		*c = conf[0]
+func (c *TorrentDownloaderConfig) set(conf *TorrentDownloaderConfig) {
+	if conf != nil {
+		*c = *conf
 	}
 
+	if c.BlockSize <= 0 {
+		c.BlockSize = BlockSize
+	}
 	if c.WorkerNum <= 0 {
 		c.WorkerNum = 128
 	}
@@ -102,16 +110,15 @@ type TorrentDownloader struct {
 // NewTorrentDownloader returns a new TorrentDownloader.
 //
 // If id is ZERO, it is reset to a random id. workerNum is 128 by default.
-func NewTorrentDownloader(c ...TorrentDownloaderConfig) *TorrentDownloader {
+func NewTorrentDownloader(c *TorrentDownloaderConfig) *TorrentDownloader {
 	var conf TorrentDownloaderConfig
-	conf.set(c...)
+	conf.set(c)
 
 	d := &TorrentDownloader{
 		conf:      conf,
 		exit:      make(chan struct{}),
 		requests:  make(chan request, conf.WorkerNum),
 		responses: make(chan TorrentResponse, 1024),
-
 		ehmsg: pp.ExtendedHandshakeMsg{
 			M: map[string]uint8{pp.ExtendedMessageNameMetadata: 1},
 		},
@@ -130,6 +137,9 @@ func NewTorrentDownloader(c ...TorrentDownloaderConfig) *TorrentDownloader {
 // Notice: the remote peer must support the "ut_metadata" extenstion.
 // Or downloading fails.
 func (d *TorrentDownloader) Request(host string, port uint16, infohash metainfo.Hash) {
+	if infohash.IsZero() {
+		panic("infohash is ZERO")
+	}
 	d.requests <- request{Host: host, Port: port, InfoHash: infohash}
 }
 
@@ -168,7 +178,7 @@ func (d *TorrentDownloader) worker() {
 		case <-d.exit:
 			return
 		case r := <-d.requests:
-			if err := d.download(r.Host, r.Port, r.PeerID, r.InfoHash); err != nil {
+			if err := d.download(r.Host, r.Port, r.InfoHash); err != nil {
 				d.conf.ErrorLog("fail to download the torrent '%s': %s",
 					r.InfoHash.HexString(), err)
 			}
@@ -176,8 +186,7 @@ func (d *TorrentDownloader) worker() {
 	}
 }
 
-func (d *TorrentDownloader) download(host string, port uint16,
-	peerID, infohash metainfo.Hash) (err error) {
+func (d *TorrentDownloader) download(host string, port uint16, infohash metainfo.Hash) (err error) {
 	addr := net.JoinHostPort(host, strconv.FormatUint(uint64(port), 10))
 	conn, err := pp.NewPeerConnByDial(addr, d.conf.ID, infohash, d.conf.DialTimeout)
 	if err != nil {
@@ -190,8 +199,6 @@ func (d *TorrentDownloader) download(host string, port uint16,
 		return
 	} else if !conn.PeerExtBits.IsSupportExtended() {
 		return fmt.Errorf("the remote peer '%s' does not support Extended", addr)
-	} else if !peerID.IsZero() && peerID != conn.PeerID {
-		return fmt.Errorf("inconsistent peer id '%s'", conn.PeerID.HexString())
 	}
 
 	if err = conn.SendExtHandshakeMsg(d.ehmsg); err != nil {
@@ -200,7 +207,7 @@ func (d *TorrentDownloader) download(host string, port uint16,
 
 	var pieces [][]byte
 	var piecesNum int
-	var metadataSize int
+	var metadataSize uint64
 	var utmetadataID uint8
 	var msg pp.Message
 
@@ -247,13 +254,14 @@ func (d *TorrentDownloader) download(host string, port uint16,
 			}
 
 			metadataSize = ehmsg.MetadataSize
-			piecesNum = metadataSize / BlockSize
-			if metadataSize%BlockSize != 0 {
+			piecesNum = int(metadataSize / d.conf.BlockSize)
+			if metadataSize%d.conf.BlockSize != 0 {
 				piecesNum++
 			}
 
 			pieces = make([][]byte, piecesNum)
 			go d.requestPieces(conn, utmetadataID, piecesNum)
+
 		case 1:
 			if pieces == nil {
 				return
@@ -269,8 +277,8 @@ func (d *TorrentDownloader) download(host string, port uint16,
 			}
 
 			pieceLen := len(utmsg.Data)
-			if (utmsg.Piece != piecesNum-1 && pieceLen != BlockSize) ||
-				(utmsg.Piece == piecesNum-1 && pieceLen != metadataSize%BlockSize) {
+			if (utmsg.Piece != piecesNum-1 && pieceLen != int(d.conf.BlockSize)) ||
+				(utmsg.Piece == piecesNum-1 && pieceLen != int(metadataSize%d.conf.BlockSize)) {
 				return
 			}
 			pieces[utmsg.Piece] = utmsg.Data

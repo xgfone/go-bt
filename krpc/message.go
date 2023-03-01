@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2020~2023 xgfone
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -272,14 +272,14 @@ type ResponseResult struct {
 	// of the requested ipv4 target.
 	//
 	// find_node
-	Nodes CompactIPv4Node `bencode:"nodes,omitempty"` // BEP 5
+	Nodes CompactIPv4Nodes `bencode:"nodes,omitempty"` // BEP 5
 
 	// Nodes6 is a string containing the compact node information for the list
 	// of the ipv6 target node, or the K(8) closest good nodes in routing table
 	// of the requested ipv6 target.
 	//
 	// find_node
-	Nodes6 CompactIPv6Node `bencode:"nodes6,omitempty"` // BEP 32
+	Nodes6 CompactIPv6Nodes `bencode:"nodes6,omitempty"` // BEP 32
 
 	// Token is used for future "announce_peer".
 	//
@@ -288,157 +288,14 @@ type ResponseResult struct {
 
 	// Values is a list of the torrent peers.
 	//
+	// For each element, in general, it is a compact IP-address/port info and
+	// may be decoded to Addr, for example,
+	//
+	//   addrs := make([]Addr, len(values))
+	//   for i, v := range values {
+	//       addrs[i].UnmarshalBinary([]byte(v))
+	//   }
+	//
 	// get_peers
-	Values CompactAddresses `bencode:"values,omitempty"` // BEP 5
-}
-
-/// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-// CompactAddresses represents a group of the compact addresses.
-type CompactAddresses []metainfo.Address
-
-// MarshalBinary implements the interface binary.BinaryMarshaler.
-func (cas CompactAddresses) MarshalBinary() ([]byte, error) {
-	ss := make([]string, len(cas))
-	for i, addr := range cas {
-		data, err := addr.MarshalBinary()
-		if err != nil {
-			return nil, err
-		}
-		ss[i] = string(data)
-	}
-	return bencode.EncodeBytes(ss)
-}
-
-// UnmarshalBinary implements the interface binary.BinaryUnmarshaler.
-func (cas *CompactAddresses) UnmarshalBinary(b []byte) (err error) {
-	var ss []string
-	if err = bencode.DecodeBytes(b, &ss); err == nil {
-		addrs := make(CompactAddresses, len(ss))
-		for i, s := range ss {
-			var addr metainfo.Address
-			if err = addr.UnmarshalBinary([]byte(s)); err != nil {
-				return
-			}
-			addrs[i] = addr
-		}
-	}
-
-	return
-}
-
-/// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-// CompactIPv4Node is a set of IPv4 Nodes.
-type CompactIPv4Node []Node
-
-// MarshalBinary implements the interface binary.BinaryMarshaler.
-func (cn CompactIPv4Node) MarshalBinary() ([]byte, error) {
-	buf := bytes.NewBuffer(nil)
-	buf.Grow(26 * len(cn))
-	for _, ni := range cn {
-		if ni.Addr.IP = ni.Addr.IP.To4(); len(ni.Addr.IP) == 0 {
-			continue
-		}
-		if n, err := ni.WriteBinary(buf); err != nil {
-			return nil, err
-		} else if n != 26 {
-			panic(fmt.Errorf("CompactIPv4NodeInfo: the invalid NodeInfo length '%d'", n))
-		}
-	}
-	return buf.Bytes(), nil
-}
-
-// UnmarshalBinary implements the interface binary.BinaryUnmarshaler.
-func (cn *CompactIPv4Node) UnmarshalBinary(b []byte) (err error) {
-	_len := len(b)
-	if _len%26 != 0 {
-		return fmt.Errorf("CompactIPv4NodeInfo: invalid bytes length '%d'", _len)
-	}
-
-	nis := make([]Node, 0, _len/26)
-	for i := 0; i < _len; i += 26 {
-		var ni Node
-		if err = ni.UnmarshalBinary(b[i : i+26]); err != nil {
-			return
-		}
-		nis = append(nis, ni)
-	}
-
-	*cn = nis
-	return
-}
-
-// MarshalBencode implements the interface bencode.Marshaler.
-func (cn CompactIPv4Node) MarshalBencode() (b []byte, err error) {
-	if b, err = cn.MarshalBinary(); err == nil {
-		b, err = bencode.EncodeBytes(b)
-	}
-	return
-}
-
-// UnmarshalBencode implements the interface bencode.Unmarshaler.
-func (cn *CompactIPv4Node) UnmarshalBencode(b []byte) (err error) {
-	var s string
-	if err = bencode.DecodeBytes(b, &s); err == nil {
-		err = cn.UnmarshalBinary([]byte(s))
-	}
-	return
-}
-
-/// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-// CompactIPv6Node is a set of IPv6 Nodes.
-type CompactIPv6Node []Node
-
-// MarshalBinary implements the interface binary.BinaryMarshaler.
-func (cn CompactIPv6Node) MarshalBinary() ([]byte, error) {
-	buf := bytes.NewBuffer(nil)
-	buf.Grow(38 * len(cn))
-	for _, ni := range cn {
-		ni.Addr.IP = ni.Addr.IP.To16()
-		if n, err := ni.WriteBinary(buf); err != nil {
-			return nil, err
-		} else if n != 38 {
-			panic(fmt.Errorf("CompactIPv6NodeInfo: the invalid NodeInfo length '%d'", n))
-		}
-	}
-	return buf.Bytes(), nil
-}
-
-// UnmarshalBinary implements the interface binary.BinaryUnmarshaler.
-func (cn *CompactIPv6Node) UnmarshalBinary(b []byte) (err error) {
-	_len := len(b)
-	if _len%38 != 0 {
-		return fmt.Errorf("CompactIPv6NodeInfo: invalid bytes length '%d'", _len)
-	}
-
-	nis := make([]Node, 0, _len/38)
-	for i := 0; i < _len; i += 38 {
-		var ni Node
-		if err = ni.UnmarshalBinary(b[i : i+38]); err != nil {
-			return
-		}
-		nis = append(nis, ni)
-	}
-
-	*cn = nis
-	return
-}
-
-// MarshalBencode implements the interface bencode.Marshaler.
-func (cn CompactIPv6Node) MarshalBencode() (b []byte, err error) {
-	if b, err = cn.MarshalBinary(); err == nil {
-		b, err = bencode.EncodeBytes(b)
-	}
-	return
-}
-
-// UnmarshalBencode implements the interface bencode.Unmarshaler.
-func (cn *CompactIPv6Node) UnmarshalBencode(b []byte) (err error) {
-	var s string
-	if err = bencode.DecodeBytes(b, &s); err == nil {
-		err = cn.UnmarshalBinary([]byte(s))
-	}
-	return
+	Values []string `bencode:"values,omitempty"` // BEP 5
 }

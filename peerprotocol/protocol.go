@@ -14,9 +14,7 @@
 
 package peerprotocol
 
-import (
-	"fmt"
-)
+import "fmt"
 
 // ProtocolHeader is the BT protocal prefix.
 //

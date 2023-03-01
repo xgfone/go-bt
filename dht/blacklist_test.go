@@ -15,8 +15,11 @@
 package dht
 
 import (
+	"net"
 	"testing"
 	"time"
+
+	"github.com/xgfone/bt/krpc"
 )
 
 func (bl *blacklist) portsLen() (n int) {
@@ -42,12 +45,12 @@ func TestMemoryBlacklist(t *testing.T) {
 	bl := NewMemoryBlacklist(3, time.Second).(*blacklist)
 	defer bl.Close()
 
-	bl.Add("1.1.1.1", 123)
-	bl.Add("1.1.1.1", 456)
-	bl.Add("1.1.1.1", 789)
-	bl.Add("2.2.2.2", 111)
-	bl.Add("3.3.3.3", 0)
-	bl.Add("4.4.4.4", 222)
+	bl.Add(krpc.NewAddr(net.ParseIP("1.1.1.1"), 123))
+	bl.Add(krpc.NewAddr(net.ParseIP("1.1.1.1"), 456))
+	bl.Add(krpc.NewAddr(net.ParseIP("1.1.1.1"), 789))
+	bl.Add(krpc.NewAddr(net.ParseIP("2.2.2.2"), 111))
+	bl.Add(krpc.NewAddr(net.ParseIP("3.3.3.3"), 0))
+	bl.Add(krpc.NewAddr(net.ParseIP("4.4.4.4"), 222))
 
 	ips := bl.getIPs()
 	if len(ips) != 3 {
@@ -66,15 +69,15 @@ func TestMemoryBlacklist(t *testing.T) {
 		t.Errorf("expect port num 4, but got %d", n)
 	}
 
-	if bl.In("1.1.1.1", 111) || !bl.In("1.1.1.1", 123) {
+	if bl.In(krpc.NewAddr(net.ParseIP("1.1.1.1"), 111)) || !bl.In(krpc.NewAddr(net.ParseIP("1.1.1.1"), 123)) {
 		t.Fail()
 	}
-	if !bl.In("3.3.3.3", 111) || bl.In("4.4.4.4", 222) {
+	if !bl.In(krpc.NewAddr(net.ParseIP("3.3.3.3"), 111)) || bl.In(krpc.NewAddr(net.ParseIP("4.4.4.4"), 222)) {
 		t.Fail()
 	}
 
-	bl.Del("3.3.3.3", 0)
-	if bl.In("3.3.3.3", 111) {
+	bl.Del(krpc.NewAddr(net.ParseIP("3.3.3.3"), 0))
+	if bl.In(krpc.NewAddr(net.ParseIP("3.3.3.3"), 111)) {
 		t.Fail()
 	}
 }

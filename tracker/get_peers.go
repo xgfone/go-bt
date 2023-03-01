@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2020~2023 xgfone
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ type GetPeersResult struct {
 // GetPeers gets the peers from the trackers.
 //
 // Notice: the returned chan will be closed when all the requests end.
-func GetPeers(ctx context.Context, id, infohash metainfo.Hash, trackers []string) []GetPeersResult {
+func GetPeers(ctx context.Context, nodeid, infohash metainfo.Hash, trackers []string) []GetPeersResult {
 	if len(trackers) == 0 {
 		return nil
 	}
@@ -65,7 +65,7 @@ func GetPeers(ctx context.Context, id, infohash metainfo.Hash, trackers []string
 	for i := 0; i < wlen; i++ {
 		go func() {
 			for tracker := range reqs {
-				resp, err := getPeers(ctx, wg, tracker, id, infohash)
+				resp, err := getPeers(ctx, wg, tracker, nodeid, infohash)
 				lock.Lock()
 				results = append(results, GetPeersResult{
 					Tracker: tracker,
@@ -87,7 +87,7 @@ func getPeers(ctx context.Context, wg *sync.WaitGroup, tracker string,
 	nodeID, infoHash metainfo.Hash) (resp AnnounceResponse, err error) {
 	defer wg.Done()
 
-	client, err := NewClient(tracker, ClientConfig{ID: nodeID})
+	client, err := NewClient(tracker, nodeID, nil)
 	if err == nil {
 		resp, err = client.Announce(ctx, AnnounceRequest{InfoHash: infoHash})
 	}

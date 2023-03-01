@@ -4,7 +4,7 @@ env:
   GO111MODULE: on
 jobs:
   build:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     name: Go ${{ matrix.go }}
     strategy:
       matrix:
@@ -17,10 +17,12 @@ jobs:
         - '1.16'
         - '1.17'
         - '1.18'
+        - '1.19'
+        - '1.20'
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Setup Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
         go-version: ${{ matrix.go }}
     - run: go test -race ./...

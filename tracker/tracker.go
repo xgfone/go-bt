@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2020~2023 xgfone
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ type AnnounceRequest struct {
 
 	IP      net.IP // Optional
 	Key     int32  // Optional
-	NumWant int32  // Optional, BEP 15: -1 for default. But we use 0 as default.
+	NumWant int32  // Optional
 	Port    uint16 // Optional
 }
 
@@ -89,7 +89,6 @@ func (ar AnnounceRequest) ToUDPAnnounceRequest() udptracker.AnnounceRequest {
 		Left:       ar.Left,
 		Uploaded:   ar.Uploaded,
 		Event:      ar.Event,
-		IP:         ar.IP,
 		Key:        ar.Key,
 		NumWant:    ar.NumWant,
 		Port:       ar.Port,
@@ -103,7 +102,7 @@ type AnnounceResponse struct {
 	Interval  uint32
 	Leechers  uint32
 	Seeders   uint32
-	Addresses []metainfo.Address
+	Addresses []metainfo.HostAddr
 }
 
 // FromHTTPAnnounceResponse sets itself from r.
@@ -111,14 +110,12 @@ func (ar *AnnounceResponse) FromHTTPAnnounceResponse(r httptracker.AnnounceRespo
 	ar.Interval = r.Interval
 	ar.Leechers = r.Incomplete
 	ar.Seeders = r.Complete
-	ar.Addresses = make([]metainfo.Address, 0, len(r.Peers)+len(r.Peers6))
-	for _, peer := range r.Peers {
-		addrs, _ := peer.Addresses()
-		ar.Addresses = append(ar.Addresses, addrs...)
+	ar.Addresses = make([]metainfo.HostAddr, 0, len(r.Peers)+len(r.Peers6))
+	for _, p := range r.Peers {
+		ar.Addresses = append(ar.Addresses, metainfo.NewHostAddr(p.IP, p.Port))
 	}
-	for _, peer := range r.Peers6 {
-		addrs, _ := peer.Addresses()
-		ar.Addresses = append(ar.Addresses, addrs...)
+	for _, p := range r.Peers6 {
+		ar.Addresses = append(ar.Addresses, metainfo.NewHostAddr(p.IP, p.Port))
 	}
 }
 
@@ -127,7 +124,11 @@ func (ar *AnnounceResponse) FromUDPAnnounceResponse(r udptracker.AnnounceRespons
 	ar.Interval = r.Interval
 	ar.Leechers = r.Leechers
 	ar.Seeders = r.Seeders
-	ar.Addresses = r.Addresses
+
+	ar.Addresses = make([]metainfo.HostAddr, len(r.Addresses))
+	for i, a := range r.Addresses {
+		ar.Addresses[i] = metainfo.NewHostAddr(a.IP.String(), a.Port)
+	}
 }
 
 // ScrapeResponseResult is a commont Scrape response result.
@@ -171,8 +172,7 @@ func (sr ScrapeResponse) FromHTTPScrapeResponse(r httptracker.ScrapeResponse) {
 }
 
 // FromUDPScrapeResponse sets itself from hs and r.
-func (sr ScrapeResponse) FromUDPScrapeResponse(hs []metainfo.Hash,
-	r []udptracker.ScrapeResponse) {
+func (sr ScrapeResponse) FromUDPScrapeResponse(hs []metainfo.Hash, r []udptracker.ScrapeResponse) {
 	klen := len(hs)
 	if _len := len(r); _len < klen {
 		klen = _len
@@ -195,48 +195,37 @@ type Client interface {
 	Close() error
 }
 
-// ClientConfig is used to configure the defalut client implementation.
-type ClientConfig struct {
-	// The ID of the local client peer.
-	ID metainfo.Hash
-
-	// The http client used only the tracker client is based on HTTP.
-	HTTPClient *http.Client
-}
-
 // NewClient returns a new Client.
-func NewClient(connURL string, conf ...ClientConfig) (c Client, err error) {
-	var config ClientConfig
-	if len(conf) > 0 {
-		config = conf[0]
-	}
-
+//
+// If id is ZERO, use a random hash instead.
+// If client is nil, use http.DefaultClient instead for the http tracker.
+func NewClient(connURL string, id metainfo.Hash, client *http.Client) (c Client, err error) {
 	u, err := url.Parse(connURL)
-	if err == nil {
-		switch u.Scheme {
-		case "http", "https":
-			tracker := httptracker.NewClient(connURL, "")
-			if !config.ID.IsZero() {
-				tracker.ID = config.ID
-			}
-			c = &tclient{url: connURL, http: tracker}
-
-		case "udp", "udp4", "udp6":
-			var utc *udptracker.Client
-			config := udptracker.ClientConfig{ID: config.ID}
-			utc, err = udptracker.NewClientByDial(u.Scheme, u.Host, config)
-			if err == nil {
-				var e []udptracker.Extension
-				if p := u.RequestURI(); p != "" {
-					e = []udptracker.Extension{udptracker.NewURLData([]byte(p))}
-				}
-				c = &tclient{url: connURL, exts: e, udp: utc}
-			}
-		default:
-			err = fmt.Errorf("unknown url scheme '%s'", u.Scheme)
-		}
+	if err != nil {
+		return
 	}
-	return
+
+	tclient := &tclient{url: connURL}
+	switch u.Scheme {
+	case "http", "https":
+		tclient.http = httptracker.NewClient(id, connURL, "")
+		tclient.http.Client = client
+
+	case "udp", "udp4", "udp6":
+		tclient.udp, err = udptracker.NewClientByDial(u.Scheme, u.Host, id)
+		if err != nil {
+			return
+		}
+
+		if p := u.RequestURI(); p != "" {
+			tclient.exts = []udptracker.Extension{udptracker.NewURLData([]byte(p))}
+		}
+
+	default:
+		err = fmt.Errorf("unknown url scheme '%s'", u.Scheme)
+	}
+
+	return tclient, nil
 }
 
 type tclient struct {

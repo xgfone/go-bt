@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2020~2023 xgfone
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,25 +45,14 @@ type wrappedPeerAddr struct {
 	Time time.Time
 }
 
-// ServerConfig is used to configure the Server.
-type ServerConfig struct {
-	MaxBufSize int                                      // Default: 2048
-	ErrorLog   func(format string, args ...interface{}) // Default: log.Printf
-}
-
-func (c *ServerConfig) setDefault() {
-	if c.MaxBufSize <= 0 {
-		c.MaxBufSize = 2048
-	}
-	if c.ErrorLog == nil {
-		c.ErrorLog = log.Printf
-	}
-}
+type buffer struct{ Data []byte }
 
 // Server is a tracker server based on UDP.
 type Server struct {
+	// Default: log.Printf
+	ErrorLog func(format string, args ...interface{})
+
 	conn    net.PacketConn
-	conf    ServerConfig
 	handler ServerHandler
 	bufpool sync.Pool
 
@@ -74,23 +63,20 @@ type Server struct {
 }
 
 // NewServer returns a new Server.
-func NewServer(c net.PacketConn, h ServerHandler, sc ...ServerConfig) *Server {
-	var conf ServerConfig
-	if len(sc) > 0 {
-		conf = sc[0]
+func NewServer(c net.PacketConn, h ServerHandler, bufSize int) *Server {
+	if bufSize <= 0 {
+		bufSize = maxBufSize
 	}
-	conf.setDefault()
 
-	s := &Server{
-		conf:    conf,
+	return &Server{
 		conn:    c,
 		handler: h,
 		exit:    make(chan struct{}),
 		conns:   make(map[uint64]wrappedPeerAddr, 128),
+		bufpool: sync.Pool{New: func() interface{} {
+			return &buffer{Data: make([]byte, bufSize)}
+		}},
 	}
-	s.bufpool.New = func() interface{} { return make([]byte, conf.MaxBufSize) }
-
-	return s
 }
 
 // Close closes the tracker server.
@@ -126,11 +112,11 @@ func (uts *Server) cleanConnectionID(interval time.Duration) {
 func (uts *Server) Run() {
 	go uts.cleanConnectionID(time.Minute * 2)
 	for {
-		buf := uts.bufpool.Get().([]byte)
-		n, raddr, err := uts.conn.ReadFrom(buf)
+		buf := uts.bufpool.Get().(*buffer)
+		n, raddr, err := uts.conn.ReadFrom(buf.Data)
 		if err != nil {
 			if !strings.Contains(err.Error(), "closed") {
-				uts.conf.ErrorLog("failed to read udp tracker request: %s", err)
+				uts.errorf("failed to read udp tracker request: %s", err)
 			}
 			return
 		} else if n < 16 {
@@ -140,18 +126,26 @@ func (uts *Server) Run() {
 	}
 }
 
-func (uts *Server) handleRequest(raddr *net.UDPAddr, buf []byte, n int) {
+func (uts *Server) errorf(format string, args ...interface{}) {
+	if uts.ErrorLog == nil {
+		log.Printf(format, args...)
+	} else {
+		uts.ErrorLog(format, args...)
+	}
+}
+
+func (uts *Server) handleRequest(raddr *net.UDPAddr, buf *buffer, n int) {
 	defer uts.bufpool.Put(buf)
-	uts.handlePacket(raddr, buf[:n])
+	uts.handlePacket(raddr, buf.Data[:n])
 }
 
 func (uts *Server) send(raddr *net.UDPAddr, b []byte) {
 	n, err := uts.conn.WriteTo(b, raddr)
 	if err != nil {
-		uts.conf.ErrorLog("fail to send the udp tracker response to '%s': %s",
+		uts.errorf("fail to send the udp tracker response to '%s': %s",
 			raddr.String(), err)
 	} else if n < len(b) {
-		uts.conf.ErrorLog("too short udp tracker response sent to '%s'", raddr.String())
+		uts.errorf("too short udp tracker response sent to '%s'", raddr.String())
 	}
 }
 
@@ -190,16 +184,14 @@ func (uts *Server) sendConnResp(raddr *net.UDPAddr, tid uint32, cid uint64) {
 	uts.send(raddr, buf.Bytes())
 }
 
-func (uts *Server) sendAnnounceResp(raddr *net.UDPAddr, tid uint32,
-	resp AnnounceResponse) {
+func (uts *Server) sendAnnounceResp(raddr *net.UDPAddr, tid uint32, resp AnnounceResponse) {
 	buf := bytes.NewBuffer(make([]byte, 0, 8+12+len(resp.Addresses)*18))
 	encodeResponseHeader(buf, ActionAnnounce, tid)
-	resp.EncodeTo(buf)
+	resp.EncodeTo(buf, raddr.IP.To4() != nil)
 	uts.send(raddr, buf.Bytes())
 }
 
-func (uts *Server) sendScrapResp(raddr *net.UDPAddr, tid uint32,
-	rs []ScrapeResponse) {
+func (uts *Server) sendScrapResp(raddr *net.UDPAddr, tid uint32, rs []ScrapeResponse) {
 	buf := bytes.NewBuffer(make([]byte, 0, 8+len(rs)*12))
 	encodeResponseHeader(buf, ActionScrape, tid)
 	for _, r := range rs {
@@ -209,9 +201,9 @@ func (uts *Server) sendScrapResp(raddr *net.UDPAddr, tid uint32,
 }
 
 func (uts *Server) handlePacket(raddr *net.UDPAddr, b []byte) {
-	cid := binary.BigEndian.Uint64(b[:8])
-	action := binary.BigEndian.Uint32(b[8:12])
-	tid := binary.BigEndian.Uint32(b[12:16])
+	cid := binary.BigEndian.Uint64(b[:8])      // 8: 0  - 8
+	action := binary.BigEndian.Uint32(b[8:12]) // 4: 8  - 12
+	tid := binary.BigEndian.Uint32(b[12:16])   // 4: 12 - 16
 	b = b[16:]
 
 	// Handle the connection request.
@@ -241,13 +233,13 @@ func (uts *Server) handlePacket(raddr *net.UDPAddr, b []byte) {
 				uts.sendError(raddr, tid, "invalid announce request")
 				return
 			}
-			req.DecodeFrom(b, true)
+			req.DecodeFrom(b)
 		} else { // For ipv6
 			if len(b) < 94 {
 				uts.sendError(raddr, tid, "invalid announce request")
 				return
 			}
-			req.DecodeFrom(b, false)
+			req.DecodeFrom(b)
 		}
 
 		resp, err := uts.handler.OnAnnounce(raddr, req)
@@ -256,6 +248,7 @@ func (uts *Server) handlePacket(raddr *net.UDPAddr, b []byte) {
 		} else {
 			uts.sendAnnounceResp(raddr, tid, resp)
 		}
+
 	case ActionScrape:
 		_len := len(b)
 		infohashes := make([]metainfo.Hash, 0, _len/20)
@@ -274,6 +267,7 @@ func (uts *Server) handlePacket(raddr *net.UDPAddr, b []byte) {
 		} else {
 			uts.sendScrapResp(raddr, tid, resps)
 		}
+
 	default:
 		uts.sendError(raddr, tid, "unkwnown action")
 	}

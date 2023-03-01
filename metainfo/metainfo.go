@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	"github.com/xgfone/bt/bencode"
-	"github.com/xgfone/bt/utils"
+	"github.com/xgfone/bt/internal/helper"
 )
 
 // Bytes is the []byte type.
@@ -35,7 +35,7 @@ func (al AnnounceList) Unique() (announces []string) {
 	announces = make([]string, 0, len(al))
 	for _, tier := range al {
 		for _, v := range tier {
-			if v != "" && !utils.InStringSlice(announces, v) {
+			if v != "" && !helper.ContainsString(announces, v) {
 				announces = append(announces, v)
 			}
 		}
@@ -93,11 +93,11 @@ func (us *URLList) UnmarshalBencode(b []byte) (err error) {
 
 // MetaInfo represents the .torrent file.
 type MetaInfo struct {
-	InfoBytes    Bytes         `bencode:"info"`                    // BEP 3
-	Announce     string        `bencode:"announce,omitempty"`      // BEP 3
-	AnnounceList AnnounceList  `bencode:"announce-list,omitempty"` // BEP 12
-	Nodes        []HostAddress `bencode:"nodes,omitempty"`         // BEP 5
-	URLList      URLList       `bencode:"url-list,omitempty"`      // BEP 19
+	InfoBytes    Bytes        `bencode:"info"`                    // BEP 3
+	Announce     string       `bencode:"announce,omitempty"`      // BEP 3
+	AnnounceList AnnounceList `bencode:"announce-list,omitempty"` // BEP 12
+	Nodes        []HostAddr   `bencode:"nodes,omitempty"`         // BEP 5
+	URLList      URLList      `bencode:"url-list,omitempty"`      // BEP 19
 
 	// Where's this specified?
 	// Mentioned at https://wiki.theory.org/index.php/BitTorrentSpecification.
