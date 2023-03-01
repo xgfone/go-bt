@@ -129,7 +129,7 @@ func ExampleServer() {
 
 	server1.GetPeers(infohash, func(r Result) {
 		if len(r.Peers) == 0 {
-			fmt.Printf("no peers for %s\n", infohash)
+			fmt.Printf("%s: no peers for %s\n", r.Addr.String(), infohash)
 		} else {
 			for _, peer := range r.Peers {
 				fmt.Printf("%s: %s\n", infohash, peer)
@@ -147,7 +147,7 @@ func ExampleServer() {
 	// which will search the DHT server1 recursively.
 	server2.GetPeers(infohash, func(r Result) {
 		if len(r.Peers) == 0 {
-			fmt.Printf("no peers for %s\n", infohash)
+			fmt.Printf("%s: no peers for %s\n", r.Addr.String(), infohash)
 		} else {
 			for _, peer := range r.Peers {
 				fmt.Printf("%s: %s\n", infohash, peer)
@@ -164,11 +164,11 @@ func ExampleServer() {
 	// Server3: 2
 	// 127.0.0.1:9001 is searching 0102030405060708090a0b0c0d0e0f1011121314
 	// 127.0.0.1:9001 is searching 0102030405060708090a0b0c0d0e0f1011121314
-	// no peers for 0102030405060708090a0b0c0d0e0f1011121314
-	// no peers for 0102030405060708090a0b0c0d0e0f1011121314
+	// 127.0.0.1:9002: no peers for 0102030405060708090a0b0c0d0e0f1011121314
+	// 127.0.0.1:9003: no peers for 0102030405060708090a0b0c0d0e0f1011121314
 	// 127.0.0.1:9002 is searching 0102030405060708090a0b0c0d0e0f1011121314
 	// 127.0.0.1:9002 is searching 0102030405060708090a0b0c0d0e0f1011121314
-	// no peers for 0102030405060708090a0b0c0d0e0f1011121314
+	// 127.0.0.1:9003: no peers for 0102030405060708090a0b0c0d0e0f1011121314
 	// 0102030405060708090a0b0c0d0e0f1011121314: 127.0.0.1:9001
 	// 127.0.0.1:9001 has downloaded 0102030405060708090a0b0c0d0e0f1011121314
 }
