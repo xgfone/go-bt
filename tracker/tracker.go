@@ -77,6 +77,7 @@ func (ar AnnounceRequest) ToHTTPAnnounceRequest() httptracker.AnnounceRequest {
 		Event:      ar.Event,
 		NumWant:    ar.NumWant,
 		Key:        ar.Key,
+		Compact:    true,
 	}
 }
 
@@ -99,9 +100,9 @@ func (ar AnnounceRequest) ToUDPAnnounceRequest() udptracker.AnnounceRequest {
 //
 // BEP 3, 15
 type AnnounceResponse struct {
-	Interval  uint32
-	Leechers  uint32
-	Seeders   uint32
+	Interval  uint32 // Reflush Interval
+	Leechers  uint32 // Incomplete
+	Seeders   uint32 // Complete
 	Addresses []metainfo.HostAddr
 }
 

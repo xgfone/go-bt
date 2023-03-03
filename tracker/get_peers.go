@@ -16,81 +16,20 @@ package tracker
 
 import (
 	"context"
-	"net/url"
-	"sync"
 
 	"github.com/xgfone/bt/metainfo"
 )
 
-// GetPeersResult represents the result of getting the peers from the tracker.
-type GetPeersResult struct {
-	Error   error // nil stands for success. Or, for failure.
-	Tracker string
-	Resp    AnnounceResponse
-}
-
-// GetPeers gets the peers from the trackers.
-//
-// Notice: the returned chan will be closed when all the requests end.
-func GetPeers(ctx context.Context, nodeid, infohash metainfo.Hash, trackers []string) []GetPeersResult {
-	if len(trackers) == 0 {
-		return nil
-	}
-
-	for i, t := range trackers {
-		if u, err := url.Parse(t); err == nil && u.Path == "" {
-			u.Path = "/announce"
-			trackers[i] = u.String()
-		}
-	}
-
-	_len := len(trackers)
-	wlen := _len
-	if wlen > 10 {
-		wlen = 10
-	}
-
-	reqs := make(chan string, wlen)
-	go func() {
-		for i := 0; i < _len; i++ {
-			reqs <- trackers[i]
-		}
-	}()
-
-	wg := new(sync.WaitGroup)
-	wg.Add(_len)
-
-	var lock sync.Mutex
-	results := make([]GetPeersResult, 0, _len)
-	for i := 0; i < wlen; i++ {
-		go func() {
-			for tracker := range reqs {
-				resp, err := getPeers(ctx, wg, tracker, nodeid, infohash)
-				lock.Lock()
-				results = append(results, GetPeersResult{
-					Tracker: tracker,
-					Error:   err,
-					Resp:    resp,
-				})
-				lock.Unlock()
-			}
-		}()
-	}
-
-	wg.Wait()
-	close(reqs)
-
-	return results
-}
-
-func getPeers(ctx context.Context, wg *sync.WaitGroup, tracker string,
-	nodeID, infoHash metainfo.Hash) (resp AnnounceResponse, err error) {
-	defer wg.Done()
-
+// GetPeers gets the peers from the tracker.
+func GetPeers(ctx context.Context, tracker string, nodeID, infoHash metainfo.Hash, totalLength int64) (AnnounceResponse, error) {
 	client, err := NewClient(tracker, nodeID, nil)
-	if err == nil {
-		resp, err = client.Announce(ctx, AnnounceRequest{InfoHash: infoHash})
+	if err != nil {
+		return AnnounceResponse{}, err
 	}
 
-	return
+	return client.Announce(ctx, AnnounceRequest{
+		Left:     totalLength,
+		InfoHash: infoHash,
+		Port:     6881,
+	})
 }
