@@ -122,9 +122,13 @@ type PeerConn struct {
 	PeerInterested bool
 
 	// Timeout is used to control the timeout of reading/writing the message.
+	// If WriteTimeout or ReadTimeout is ZERO, try to use Timeout instead.
+	//
 	//
 	// The default is 0, which represents no timeout.
-	Timeout time.Duration
+	WriteTimeout time.Duration
+	ReadTimeout  time.Duration
+	Timeout      time.Duration
 
 	// MaxLength is used to limit the maximum number of the message body.
 	//
@@ -168,8 +172,8 @@ func NewPeerConn(conn net.Conn, id, infohash metainfo.Hash) *PeerConn {
 }
 
 // NewPeerConnByDial returns a new PeerConn by dialing to addr with the "tcp" network.
-func NewPeerConnByDial(addr string, id, infohash metainfo.Hash, timeout time.Duration) (pc *PeerConn, err error) {
-	conn, err := net.DialTimeout("tcp", addr, timeout)
+func NewPeerConnByDial(addr string, id, infohash metainfo.Hash, dialTimeout time.Duration) (pc *PeerConn, err error) {
+	conn, err := net.DialTimeout("tcp", addr, dialTimeout)
 	if err == nil {
 		pc = NewPeerConn(conn, id, infohash)
 	}
@@ -177,15 +181,51 @@ func NewPeerConnByDial(addr string, id, infohash metainfo.Hash, timeout time.Dur
 }
 
 func (pc *PeerConn) setReadTimeout() {
-	if pc.Timeout > 0 {
-		pc.Conn.SetReadDeadline(time.Now().Add(pc.Timeout))
+	switch {
+	case pc.ReadTimeout > 0:
+		pc.SetReadTimeout(pc.ReadTimeout)
+	case pc.Timeout > 0:
+		pc.SetReadTimeout(pc.Timeout)
 	}
 }
 
 func (pc *PeerConn) setWriteTimeout() {
-	if pc.Timeout > 0 {
-		pc.Conn.SetWriteDeadline(time.Now().Add(pc.Timeout))
+	switch {
+	case pc.WriteTimeout > 0:
+		pc.SetWriteTimeout(pc.WriteTimeout)
+	case pc.Timeout > 0:
+		pc.SetWriteTimeout(pc.Timeout)
 	}
+}
+
+// SetTimeout is a convenient method to set timeout of the read&write operation.
+//
+// If timeout is ZERO or negative, clear the read&write timeout.
+func (pc *PeerConn) SetTimeout(timeout time.Duration) error {
+	if timeout > 0 {
+		pc.Conn.SetDeadline(time.Now().Add(timeout))
+	}
+	return pc.Conn.SetDeadline(time.Time{})
+}
+
+// SetReadTimeout is a convenient method to set timeout of the read operation.
+//
+// If timeout is ZERO or negative, clear the read timeout.
+func (pc *PeerConn) SetReadTimeout(timeout time.Duration) error {
+	if timeout > 0 {
+		pc.Conn.SetReadDeadline(time.Now().Add(timeout))
+	}
+	return pc.Conn.SetReadDeadline(time.Time{})
+}
+
+// SetWriteTimeout is a convenient method to set timeout of the write operation.
+//
+// If timeout is ZERO or negative, clear the write timeout.
+func (pc *PeerConn) SetWriteTimeout(timeout time.Duration) error {
+	if timeout > 0 {
+		pc.Conn.SetWriteDeadline(time.Now().Add(timeout))
+	}
+	return pc.Conn.SetWriteDeadline(time.Time{})
 }
 
 // SetChoked sets the Choked state of the local client peer.

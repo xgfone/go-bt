@@ -94,10 +94,10 @@ func (us *URLList) UnmarshalBencode(b []byte) (err error) {
 // MetaInfo represents the .torrent file.
 type MetaInfo struct {
 	InfoBytes    Bytes        `bencode:"info"`                    // BEP 3
-	Announce     string       `bencode:"announce,omitempty"`      // BEP 3
-	AnnounceList AnnounceList `bencode:"announce-list,omitempty"` // BEP 12
-	Nodes        []HostAddr   `bencode:"nodes,omitempty"`         // BEP 5
-	URLList      URLList      `bencode:"url-list,omitempty"`      // BEP 19
+	Announce     string       `bencode:"announce,omitempty"`      // BEP 3,  Single Tracker
+	AnnounceList AnnounceList `bencode:"announce-list,omitempty"` // BEP 12, Multi-Tracker
+	Nodes        []HostAddr   `bencode:"nodes,omitempty"`         // BEP 5,  DHT
+	URLList      URLList      `bencode:"url-list,omitempty"`      // BEP 19, WebSeed
 
 	// Where's this specified?
 	// Mentioned at https://wiki.theory.org/index.php/BitTorrentSpecification.
