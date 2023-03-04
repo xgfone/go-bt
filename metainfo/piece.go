@@ -24,6 +24,9 @@ import (
 	"github.com/xgfone/bt/internal/helper"
 )
 
+// BlockSize is the default size of a piece block.
+const BlockSize = 16 * 1024 // 2^14 = 16KB
+
 // Predefine some sizes of the pieces.
 const (
 	PieceSize256KB = 1024 * 256

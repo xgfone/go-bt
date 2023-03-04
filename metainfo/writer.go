@@ -86,7 +86,7 @@ func (w *writer) Close() error {
 	return nil
 }
 
-// WriteBlock writes a data block.
+// WriteBlock writes a block data.
 func (w *writer) WriteBlock(pieceIndex, pieceOffset uint32, p []byte) (int, error) {
 	return w.WriteAt(p, w.info.PieceOffset(pieceIndex, pieceOffset))
 }

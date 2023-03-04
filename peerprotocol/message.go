@@ -125,18 +125,27 @@ func (bf BitField) Unsets() (pieces Pieces) {
 	return
 }
 
+// CanSet reports whether the index can be set.
+func (bf BitField) CanSet(index uint32) bool {
+	return (int(index) / 8) < len(bf)
+}
+
 // Set sets the bit of the piece to 1 by its index.
-func (bf BitField) Set(index uint32) {
+func (bf BitField) Set(index uint32) (ok bool) {
 	if i := int(index) / 8; i < len(bf) {
 		bf[i] |= (1 << byte(7-index%8))
+		ok = true
 	}
+	return
 }
 
 // Unset sets the bit of the piece to 0 by its index.
-func (bf BitField) Unset(index uint32) {
+func (bf BitField) Unset(index uint32) (ok bool) {
 	if i := int(index) / 8; i < len(bf) {
 		bf[i] &^= (1 << byte(7-index%8))
+		ok = true
 	}
+	return
 }
 
 // IsSet reports whether the bit of the piece is set to 1.

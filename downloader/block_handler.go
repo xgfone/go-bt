@@ -14,10 +14,7 @@
 
 package downloader
 
-import (
-	"github.com/xgfone/bt/metainfo"
-	pp "github.com/xgfone/bt/peerprotocol"
-)
+import pp "github.com/xgfone/bt/peerprotocol"
 
 // BlockDownloadHandler is used to downloads the files in the torrent file.
 type BlockDownloadHandler struct {
@@ -25,51 +22,45 @@ type BlockDownloadHandler struct {
 	pp.NoopBep3Handler
 	pp.NoopBep6Handler
 
-	Info         metainfo.Info                              // Required
-	OnBlock      func(index, offset uint32, b []byte) error // Required
-	RequestBlock func(c *pp.PeerConn) error                 // Required
+	OnBlock  func(index, offset uint32, b []byte) error
+	ReqBlock func(c *pp.PeerConn) error
+	PieceNum int
 }
 
 // NewBlockDownloadHandler returns a new BlockDownloadHandler.
-func NewBlockDownloadHandler(info metainfo.Info,
-	onBlock func(pieceIndex, pieceOffset uint32, b []byte) error,
-	requestBlock func(c *pp.PeerConn) error) BlockDownloadHandler {
+func NewBlockDownloadHandler(pieceNum int, reqBlock func(c *pp.PeerConn) error,
+	onBlock func(pieceIndex, pieceOffset uint32, b []byte) error) BlockDownloadHandler {
 	return BlockDownloadHandler{
-		Info:         info,
-		OnBlock:      onBlock,
-		RequestBlock: requestBlock,
+		OnBlock:  onBlock,
+		ReqBlock: reqBlock,
+		PieceNum: pieceNum,
 	}
-}
-
-// OnHandShake implements the interface Handler#OnHandShake.
-//
-// Notice: it uses the field Data to store the inner data, you mustn't override
-// it.
-func (fd BlockDownloadHandler) OnHandShake(c *pp.PeerConn) (err error) {
-	if err = c.SetUnchoked(); err == nil {
-		err = c.SetInterested()
-	}
-	return
 }
 
 /// ---------------------------------------------------------------------------
 /// BEP 3
 
 func (fd BlockDownloadHandler) request(pc *pp.PeerConn) (err error) {
+	if fd.ReqBlock == nil {
+		return nil
+	}
+
 	if pc.PeerChoked {
 		err = pp.ErrChoked
 	} else {
-		err = fd.RequestBlock(pc)
+		err = fd.ReqBlock(pc)
 	}
 	return
 }
 
 // Piece implements the interface Bep3Handler#Piece.
-func (fd BlockDownloadHandler) Piece(c *pp.PeerConn, i, b uint32, p []byte) (err error) {
-	if err = fd.OnBlock(i, b, p); err == nil {
-		err = fd.request(c)
+func (fd BlockDownloadHandler) Piece(c *pp.PeerConn, i, b uint32, p []byte) error {
+	if fd.OnBlock != nil {
+		if err := fd.OnBlock(i, b, p); err != nil {
+			return err
+		}
 	}
-	return
+	return fd.request(c)
 }
 
 // Unchoke implements the interface Bep3Handler#Unchoke.
@@ -88,7 +79,9 @@ func (fd BlockDownloadHandler) Have(pc *pp.PeerConn, index uint32) (err error) {
 
 // HaveAll implements the interface Bep6Handler#HaveAll.
 func (fd BlockDownloadHandler) HaveAll(pc *pp.PeerConn) (err error) {
-	pc.BitField = pp.NewBitField(fd.Info.CountPieces(), true)
+	if fd.PieceNum > 0 {
+		pc.BitField = pp.NewBitField(fd.PieceNum, true)
+	}
 	return
 }
 

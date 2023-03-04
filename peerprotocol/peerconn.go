@@ -28,11 +28,11 @@ import (
 // Predefine some errors about extension support.
 var (
 	ErrChoked             = fmt.Errorf("choked")
-	ErrNotFirstMsg        = fmt.Errorf("not the first message")
 	ErrNotSupportDHT      = fmt.Errorf("not support DHT extension")
 	ErrNotSupportFast     = fmt.Errorf("not support Fast extension")
 	ErrNotSupportExtended = fmt.Errorf("not support Extended extension")
 	ErrSecondExtHandshake = fmt.Errorf("second extended handshake")
+	ErrNoExtMessageID     = fmt.Errorf("no extended message id")
 	ErrNoExtHandshake     = fmt.Errorf("no extended handshake")
 )
 
@@ -79,6 +79,38 @@ type Bep10Handler interface {
 	OnPayload(conn *PeerConn, extid uint8, payload []byte) error
 }
 
+// ConnStage represents the stage of connection to the peer.
+type ConnStage int
+
+// IsConnected reports whether the connection stage is connected.
+func (s ConnStage) IsConnected() bool { return s == ConnStageConnected }
+
+// IsHandshook reports whether the connection stage is handshook.
+func (s ConnStage) IsHandshook() bool { return s == ConnStageHandshook }
+
+// IsMessage reports whether the connection stage is message.
+func (s ConnStage) IsMessage() bool { return s == ConnStageMessage }
+
+func (s ConnStage) String() string {
+	switch s {
+	case ConnStageConnected:
+		return "connected"
+	case ConnStageHandshook:
+		return "handshook"
+	case ConnStageMessage:
+		return "message"
+	default:
+		return fmt.Sprintf("ConnStage(%d)", s)
+	}
+}
+
+// Pre-define some connection stages.
+const (
+	ConnStageConnected ConnStage = iota
+	ConnStageHandshook
+	ConnStageMessage
+)
+
 // PeerConn is used to manage the connection to the peer.
 type PeerConn struct {
 	net.Conn
@@ -90,6 +122,7 @@ type PeerConn struct {
 
 	PeerID      metainfo.Hash // The ID of the remote peer.
 	PeerExtBits ExtensionBits // The extension bits of the remote peer.
+	PeerStage   ConnStage     // The connection stage of peer.
 
 	// These two states is controlled by the local client peer.
 	//
@@ -151,9 +184,6 @@ type PeerConn struct {
 	//
 	// Optional.
 	OnWriteMsg func(pc *PeerConn, m Message) error
-
-	notFirstMsg  bool
-	extHandshake bool
 }
 
 // NewPeerConn returns a new PeerConn.
@@ -162,6 +192,7 @@ type PeerConn struct {
 // for the peer server, but not for the peer client.
 func NewPeerConn(conn net.Conn, id, infohash metainfo.Hash) *PeerConn {
 	return &PeerConn{
+		PeerStage:  ConnStageConnected,
 		Conn:       conn,
 		ID:         id,
 		InfoHash:   infohash,
@@ -284,21 +315,29 @@ func (pc *PeerConn) SetNotInterested() (err error) {
 //
 // BEP 3
 func (pc *PeerConn) Handshake() error {
+	if !pc.PeerStage.IsConnected() {
+		return fmt.Errorf("the peer connection stage '%s' is not connected", pc.PeerStage)
+	}
+
 	m := HandshakeMsg{ExtensionBits: pc.ExtBits, PeerID: pc.ID, InfoHash: pc.InfoHash}
 	pc.setReadTimeout()
 	rhm, err := Handshake(pc.Conn, m)
-	if err == nil {
-		pc.PeerID = rhm.PeerID
-		pc.PeerExtBits = rhm.ExtensionBits
-		if pc.InfoHash.IsZero() {
-			pc.InfoHash = rhm.InfoHash
-		} else if pc.InfoHash != rhm.InfoHash {
-			return fmt.Errorf("inconsistent infohash: local(%s)=%s, remote(%s)=%s",
-				pc.Conn.LocalAddr().String(), pc.InfoHash.String(),
-				pc.Conn.RemoteAddr().String(), rhm.InfoHash.String())
-		}
+	if err != nil {
+		return err
 	}
-	return err
+
+	pc.PeerID = rhm.PeerID
+	pc.PeerExtBits = rhm.ExtensionBits
+	if pc.InfoHash.IsZero() {
+		pc.InfoHash = rhm.InfoHash
+	} else if pc.InfoHash != rhm.InfoHash {
+		return fmt.Errorf("inconsistent infohash: local(%s)=%s, remote(%s)=%s",
+			pc.Conn.LocalAddr().String(), pc.InfoHash.String(),
+			pc.Conn.RemoteAddr().String(), rhm.InfoHash.String())
+	}
+
+	pc.PeerStage = ConnStageHandshook
+	return nil
 }
 
 // ReadMsg reads the message.
@@ -307,6 +346,22 @@ func (pc *PeerConn) Handshake() error {
 func (pc *PeerConn) ReadMsg() (m Message, err error) {
 	pc.setReadTimeout()
 	err = m.Decode(pc.Conn, pc.MaxLength)
+	if err != nil {
+		return
+	}
+
+	switch m.Type {
+	case MTypeBitField, MTypeHaveAll, MTypeHaveNone:
+		if !pc.PeerStage.IsHandshook() {
+			err = fmt.Errorf("%s is not first message after handshake", m.Type.String())
+			return
+		}
+	}
+
+	if pc.PeerStage.IsHandshook() {
+		pc.PeerStage = ConnStageMessage
+	}
+
 	return
 }
 
@@ -484,14 +539,19 @@ func (pc *PeerConn) SendExtMsg(extID uint8, payload []byte) error {
 	})
 }
 
+// PeerHasPiece reports whether the peer has the piece.
+func (pc *PeerConn) PeerHasPiece(index uint32) bool {
+	return pc.BitField.IsSet(index)
+}
+
 // HandleMessage calls the method of the handler to handle the message.
 //
 // If handler has also implemented the interfaces Bep3Handler, Bep5Handler,
 // Bep6Handler or Bep10Handler, their methods will be called instead of
 // Handler.OnMessage for the corresponding type message.
-func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
+func (pc *PeerConn) HandleMessage(msg Message, handler Handler) error {
 	if msg.Keepalive {
-		return
+		return nil
 	}
 
 	switch msg.Type {
@@ -499,167 +559,143 @@ func (pc *PeerConn) HandleMessage(msg Message, handler Handler) (err error) {
 	case MTypeChoke:
 		pc.PeerChoked = true
 		if h, ok := handler.(Bep3Handler); ok {
-			err = h.Choke(pc)
-		} else {
-			err = handler.OnMessage(pc, msg)
+			return h.Choke(pc)
 		}
+
 	case MTypeUnchoke:
 		pc.PeerChoked = false
 		if h, ok := handler.(Bep3Handler); ok {
-			err = h.Unchoke(pc)
-		} else {
-			err = handler.OnMessage(pc, msg)
+			return h.Unchoke(pc)
 		}
+
 	case MTypeInterested:
 		pc.PeerInterested = true
 		if h, ok := handler.(Bep3Handler); ok {
-			err = h.Interested(pc)
-		} else {
-			err = handler.OnMessage(pc, msg)
+			return h.Interested(pc)
 		}
+
 	case MTypeNotInterested:
 		pc.PeerInterested = false
 		if h, ok := handler.(Bep3Handler); ok {
-			err = h.NotInterested(pc)
-		} else {
-			err = handler.OnMessage(pc, msg)
+			return h.NotInterested(pc)
 		}
+
 	case MTypeHave:
+		pc.BitField.Set(msg.Index)
 		if h, ok := handler.(Bep3Handler); ok {
-			err = h.Have(pc, msg.Index)
-		} else {
-			err = handler.OnMessage(pc, msg)
+			return h.Have(pc, msg.Index)
 		}
+
 	case MTypeBitField:
-		if pc.notFirstMsg {
-			err = ErrNotFirstMsg
-		} else {
-			pc.BitField = msg.BitField
-			if h, ok := handler.(Bep3Handler); ok {
-				err = h.BitField(pc, msg.BitField)
-			} else {
-				err = handler.OnMessage(pc, msg)
-			}
+		pc.BitField = msg.BitField
+		if h, ok := handler.(Bep3Handler); ok {
+			return h.BitField(pc, msg.BitField)
 		}
+
 	case MTypeRequest:
 		if h, ok := handler.(Bep3Handler); ok {
-			err = h.Request(pc, msg.Index, msg.Begin, msg.Length)
-		} else {
-			err = handler.OnMessage(pc, msg)
+			return h.Request(pc, msg.Index, msg.Begin, msg.Length)
 		}
+
 	case MTypePiece:
 		if h, ok := handler.(Bep3Handler); ok {
-			err = h.Piece(pc, msg.Index, msg.Begin, msg.Piece)
-		} else {
-			err = handler.OnMessage(pc, msg)
+			return h.Piece(pc, msg.Index, msg.Begin, msg.Piece)
 		}
+
 	case MTypeCancel:
 		if h, ok := handler.(Bep3Handler); ok {
-			err = h.Cancel(pc, msg.Index, msg.Begin, msg.Length)
-		} else {
-			err = handler.OnMessage(pc, msg)
+			return h.Cancel(pc, msg.Index, msg.Begin, msg.Length)
 		}
 
 	// BEP 5 - DHT Protocol
 	case MTypePort:
 		if !pc.ExtBits.IsSupportDHT() {
-			err = ErrNotSupportDHT
+			return ErrNotSupportDHT
 		} else if h, ok := handler.(Bep5Handler); ok {
-			err = h.Port(pc, msg.Port)
-		} else {
-			err = handler.OnMessage(pc, msg)
+			return h.Port(pc, msg.Port)
 		}
 
 	// BEP 6 - Fast Extension
 	case MTypeSuggest:
 		if !pc.ExtBits.IsSupportFast() {
-			err = ErrNotSupportFast
-		} else {
-			pc.Suggests = pc.Suggests.Append(msg.Index)
-			if h, ok := handler.(Bep6Handler); ok {
-				err = h.Suggest(pc, msg.Index)
-			} else {
-				err = handler.OnMessage(pc, msg)
-			}
+			return ErrNotSupportFast
 		}
+
+		pc.Suggests = pc.Suggests.Append(msg.Index)
+		if h, ok := handler.(Bep6Handler); ok {
+			return h.Suggest(pc, msg.Index)
+		}
+
 	case MTypeHaveAll:
-		if pc.notFirstMsg {
-			err = ErrNotFirstMsg
-		} else if !pc.ExtBits.IsSupportFast() {
-			err = ErrNotSupportFast
-		} else if h, ok := handler.(Bep6Handler); ok {
-			err = h.HaveAll(pc)
-		} else {
-			err = handler.OnMessage(pc, msg)
+		if !pc.ExtBits.IsSupportFast() {
+			return ErrNotSupportFast
 		}
+		if h, ok := handler.(Bep6Handler); ok {
+			return h.HaveAll(pc)
+		}
+
 	case MTypeHaveNone:
-		if pc.notFirstMsg {
-			err = ErrNotFirstMsg
-		} else if !pc.ExtBits.IsSupportFast() {
-			err = ErrNotSupportFast
-		} else if h, ok := handler.(Bep6Handler); ok {
-			err = h.HaveNone(pc)
-		} else {
-			err = handler.OnMessage(pc, msg)
+		if !pc.ExtBits.IsSupportFast() {
+			return ErrNotSupportFast
 		}
+		if h, ok := handler.(Bep6Handler); ok {
+			return h.HaveNone(pc)
+		}
+
 	case MTypeReject:
 		if !pc.ExtBits.IsSupportFast() {
-			err = ErrNotSupportFast
+			return ErrNotSupportFast
 		} else if h, ok := handler.(Bep6Handler); ok {
-			err = h.Reject(pc, msg.Index, msg.Begin, msg.Length)
-		} else {
-			err = handler.OnMessage(pc, msg)
+			return h.Reject(pc, msg.Index, msg.Begin, msg.Length)
 		}
+
 	case MTypeAllowedFast:
 		if !pc.ExtBits.IsSupportFast() {
-			err = ErrNotSupportFast
-		} else {
-			pc.Fasts = pc.Fasts.Append(msg.Index)
-			if h, ok := handler.(Bep6Handler); ok {
-				err = h.AllowedFast(pc, msg.Index)
-			} else {
-				err = handler.OnMessage(pc, msg)
-			}
+			return ErrNotSupportFast
+		}
+
+		pc.Fasts = pc.Fasts.Append(msg.Index)
+		if h, ok := handler.(Bep6Handler); ok {
+			return h.AllowedFast(pc, msg.Index)
 		}
 
 	// BEP 10 - Extension Protocol
 	case MTypeExtended:
 		if !pc.ExtBits.IsSupportExtended() {
-			err = ErrNotSupportExtended
+			return ErrNotSupportExtended
 		} else if h, ok := handler.(Bep10Handler); ok {
-			err = pc.handleExtMsg(h, msg)
-		} else {
-			err = handler.OnMessage(pc, msg)
+			return pc.handleExtMsg(h, msg)
 		}
 
-	// Other
 	default:
-		err = handler.OnMessage(pc, msg)
+		// (xgf): Do something??
 	}
 
-	if !pc.notFirstMsg {
-		pc.notFirstMsg = true
-	}
-
-	return
+	return handler.OnMessage(pc, msg)
 }
 
 func (pc *PeerConn) handleExtMsg(h Bep10Handler, m Message) (err error) {
+	// For Extended Message Handshake
 	if m.ExtendedID == ExtendedIDHandshake {
-		if pc.extHandshake {
+		if len(pc.ExtendedHandshakeMsg.M) > 0 { // The extended handshake has done.
 			return ErrSecondExtHandshake
 		}
 
-		pc.extHandshake = true
 		err = bencode.DecodeBytes(m.ExtendedPayload, &pc.ExtendedHandshakeMsg)
-		if err == nil {
-			err = h.OnExtHandShake(pc)
+		if err != nil {
+			return
 		}
-	} else if pc.extHandshake {
-		err = h.OnPayload(pc, m.ExtendedID, m.ExtendedPayload)
-	} else {
-		err = ErrNoExtHandshake
+
+		if len(pc.ExtendedHandshakeMsg.M) == 0 { // The extended message ids must exist.
+			return ErrNoExtMessageID
+		}
+
+		return h.OnExtHandShake(pc)
 	}
 
-	return
+	// For Extended Message
+	if len(pc.ExtendedHandshakeMsg.M) == 0 {
+		return ErrNoExtHandshake
+	}
+	return h.OnPayload(pc, m.ExtendedID, m.ExtendedPayload)
 }
