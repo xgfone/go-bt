@@ -10,7 +10,7 @@ $ go get -u github.com/xgfone/go-bt
 
 ## Features
 
-- Support `Go1.9+`.
+- Support `Go1.11+`.
 - Support IPv4/IPv6.
 - Multi-BEPs implementation.
 - Pure Go implementation without `CGO`.
