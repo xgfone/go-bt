@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/xgfone/bt/metainfo"
-	"github.com/xgfone/bt/peerprotocol"
-	pp "github.com/xgfone/bt/peerprotocol"
+	"github.com/xgfone/go-bt/metainfo"
+	"github.com/xgfone/go-bt/peerprotocol"
+	pp "github.com/xgfone/go-bt/peerprotocol"
 )
 
 type bep10Handler struct {

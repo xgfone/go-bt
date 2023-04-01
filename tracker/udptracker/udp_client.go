@@ -26,7 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/go-bt/metainfo"
 )
 
 // NewClientByDial returns a new Client by dialing.

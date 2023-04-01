@@ -19,7 +19,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/xgfone/bt/bencode"
+	"github.com/xgfone/go-bt/bencode"
 )
 
 func TestAddr(t *testing.T) {

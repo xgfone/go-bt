@@ -22,8 +22,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/xgfone/bt/metainfo"
-	"github.com/xgfone/bt/tracker/udptracker"
+	"github.com/xgfone/go-bt/metainfo"
+	"github.com/xgfone/go-bt/tracker/udptracker"
 )
 
 type testHandler struct{}

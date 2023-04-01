@@ -25,7 +25,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/go-bt/metainfo"
 )
 
 const maxBufSize = 2048

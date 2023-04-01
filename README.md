@@ -1,11 +1,11 @@
-# BT - Another Implementation For Golang [![Build Status](https://github.com/xgfone/bt/actions/workflows/go.yml/badge.svg)](https://github.com/xgfone/bt/actions/workflows/go.yml) [![GoDoc](https://pkg.go.dev/badge/github.com/xgfone/bt)](https://pkg.go.dev/github.com/xgfone/bt) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](https://raw.githubusercontent.com/xgfone/bt/master/LICENSE)
+# BT - Another Implementation For Golang [![Build Status](https://github.com/xgfone/go-bt/actions/workflows/go.yml/badge.svg)](https://github.com/xgfone/go-bt/actions/workflows/go.yml) [![GoDoc](https://pkg.go.dev/badge/github.com/xgfone/go-bt)](https://pkg.go.dev/github.com/xgfone/go-bt) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](https://raw.githubusercontent.com/xgfone/go-bt/master/LICENSE)
 
 A pure golang implementation of [BitTorrent](http://bittorrent.org/beps/bep_0000.html) library, which is inspired by [dht](https://github.com/shiyanhui/dht) and [torrent](https://github.com/anacrolix/torrent).
 
 ## Install
 
 ```shell
-$ go get -u github.com/xgfone/bt
+$ go get -u github.com/xgfone/go-bt
 ```
 
 ## Features
@@ -38,4 +38,4 @@ $ go get -u github.com/xgfone/bt
 
 ## Example
 
-See [godoc](https://pkg.go.dev/github.com/xgfone/bt) or [bttools](https://github.com/xgfone/bttools).
+See [godoc](https://pkg.go.dev/github.com/xgfone/go-bt) or [bttools](https://github.com/xgfone/bttools).

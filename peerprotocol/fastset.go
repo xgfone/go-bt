@@ -19,16 +19,17 @@ import (
 	"encoding/binary"
 	"net"
 
-	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/go-bt/metainfo"
 )
 
 // GenerateAllowedFastSet generates some allowed fast set of the torrent file.
 //
 // Argument:
-//   set: generated piece set, the length of which is the number to be generated.
-//   sz: the number of pieces in torrent.
-//   ip: the of the remote peer of the connection.
-//   infohash: infohash of torrent.
+//
+//	set: generated piece set, the length of which is the number to be generated.
+//	sz: the number of pieces in torrent.
+//	ip: the of the remote peer of the connection.
+//	infohash: infohash of torrent.
 //
 // BEP 6
 func GenerateAllowedFastSet(set []uint32, sz uint32, ip net.IP, infohash metainfo.Hash) {

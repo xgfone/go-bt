@@ -21,7 +21,7 @@ import (
 	"io"
 	"sort"
 
-	"github.com/xgfone/bt/internal/helper"
+	"github.com/xgfone/go-bt/internal/helper"
 )
 
 // BlockSize is the default size of a piece block.

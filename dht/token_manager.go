@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xgfone/bt/internal/helper"
-	"github.com/xgfone/bt/krpc"
+	"github.com/xgfone/go-bt/internal/helper"
+	"github.com/xgfone/go-bt/krpc"
 )
 
 // TokenManager is used to manage and validate the token.

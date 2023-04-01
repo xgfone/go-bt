@@ -17,7 +17,7 @@ package krpc
 import (
 	"testing"
 
-	"github.com/xgfone/bt/bencode"
+	"github.com/xgfone/go-bt/bencode"
 )
 
 func TestMessage(t *testing.T) {

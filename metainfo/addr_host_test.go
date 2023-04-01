@@ -17,7 +17,7 @@ package metainfo
 import (
 	"testing"
 
-	"github.com/xgfone/bt/bencode"
+	"github.com/xgfone/go-bt/bencode"
 )
 
 func TestAddress(t *testing.T) {

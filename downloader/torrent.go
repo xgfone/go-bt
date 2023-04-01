@@ -26,8 +26,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/xgfone/bt/metainfo"
-	pp "github.com/xgfone/bt/peerprotocol"
+	"github.com/xgfone/go-bt/metainfo"
+	pp "github.com/xgfone/go-bt/peerprotocol"
 )
 
 // BlockSize is the size of a block of the piece.

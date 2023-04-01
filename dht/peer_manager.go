@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xgfone/bt/krpc"
-	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/go-bt/krpc"
+	"github.com/xgfone/go-bt/metainfo"
 )
 
 // PeerManager is used to manage the peers.

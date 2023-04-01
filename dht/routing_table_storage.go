@@ -17,8 +17,8 @@ package dht
 import (
 	"time"
 
-	"github.com/xgfone/bt/krpc"
-	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/go-bt/krpc"
+	"github.com/xgfone/go-bt/metainfo"
 )
 
 // RoutingTableNode represents the node with last changed time in the routing table.

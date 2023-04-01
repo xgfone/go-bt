@@ -20,8 +20,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/xgfone/bt/bencode"
-	"github.com/xgfone/bt/internal/helper"
+	"github.com/xgfone/go-bt/bencode"
+	"github.com/xgfone/go-bt/internal/helper"
 )
 
 // Bytes is the []byte type.

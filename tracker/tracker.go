@@ -26,9 +26,9 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/xgfone/bt/metainfo"
-	"github.com/xgfone/bt/tracker/httptracker"
-	"github.com/xgfone/bt/tracker/udptracker"
+	"github.com/xgfone/go-bt/metainfo"
+	"github.com/xgfone/go-bt/tracker/httptracker"
+	"github.com/xgfone/go-bt/tracker/udptracker"
 )
 
 // Predefine some announce events.

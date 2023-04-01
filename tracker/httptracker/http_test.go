@@ -18,7 +18,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/go-bt/metainfo"
 )
 
 func TestHTTPAnnounceRequest(t *testing.T) {

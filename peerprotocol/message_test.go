@@ -14,9 +14,7 @@
 
 package peerprotocol
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestBitField(t *testing.T) {
 	bf := NewBitFieldFromBools([]bool{

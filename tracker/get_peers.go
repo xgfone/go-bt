@@ -17,7 +17,7 @@ package tracker
 import (
 	"context"
 
-	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/go-bt/metainfo"
 )
 
 // GetPeers gets the peers from the tracker.

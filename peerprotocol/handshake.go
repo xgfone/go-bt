@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/go-bt/metainfo"
 )
 
 var errInvalidProtocolHeader = fmt.Errorf("unexpected peer protocol header string")

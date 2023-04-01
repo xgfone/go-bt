@@ -24,7 +24,7 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/xgfone/bt/bencode"
+	"github.com/xgfone/go-bt/bencode"
 )
 
 // CompactAddr represents an address based on ip and port,

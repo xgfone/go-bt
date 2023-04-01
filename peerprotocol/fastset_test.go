@@ -18,7 +18,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/go-bt/metainfo"
 )
 
 func TestGenerateAllowedFastSet(t *testing.T) {

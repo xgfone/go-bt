@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/xgfone/bt/bencode"
+	"github.com/xgfone/go-bt/bencode"
 )
 
 var zeroHash Hash

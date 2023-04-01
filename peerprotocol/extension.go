@@ -19,7 +19,7 @@ import (
 	"errors"
 	"net"
 
-	"github.com/xgfone/bt/bencode"
+	"github.com/xgfone/go-bt/bencode"
 )
 
 var errInvalidIP = errors.New("invalid ipv4 or ipv6")

@@ -28,8 +28,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/xgfone/bt/bencode"
-	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/go-bt/bencode"
+	"github.com/xgfone/go-bt/metainfo"
 )
 
 // AnnounceRequest is the tracker announce requests.

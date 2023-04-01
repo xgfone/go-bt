@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xgfone/bt/krpc"
+	"github.com/xgfone/go-bt/krpc"
 )
 
 // Blacklist is used to manage the ip blacklist.

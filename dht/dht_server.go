@@ -25,9 +25,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xgfone/bt/bencode"
-	"github.com/xgfone/bt/krpc"
-	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/go-bt/bencode"
+	"github.com/xgfone/go-bt/krpc"
+	"github.com/xgfone/go-bt/metainfo"
 )
 
 const (

@@ -20,8 +20,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/xgfone/bt/krpc"
-	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/go-bt/krpc"
+	"github.com/xgfone/go-bt/metainfo"
 )
 
 type transaction struct {

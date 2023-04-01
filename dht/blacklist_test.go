@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xgfone/bt/krpc"
+	"github.com/xgfone/go-bt/krpc"
 )
 
 func (bl *blacklist) portsLen() (n int) {

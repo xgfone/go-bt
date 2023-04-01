@@ -20,7 +20,7 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/xgfone/bt/bencode"
+	"github.com/xgfone/go-bt/bencode"
 )
 
 // HostAddr represents an address based on host and port.

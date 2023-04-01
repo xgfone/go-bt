@@ -18,8 +18,8 @@ import (
 	"errors"
 	"net"
 
-	"github.com/xgfone/bt/bencode"
-	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/go-bt/bencode"
+	"github.com/xgfone/go-bt/metainfo"
 )
 
 var errInvalidPeer = errors.New("invalid bt peer information format")

@@ -14,7 +14,7 @@
 
 package downloader
 
-import pp "github.com/xgfone/bt/peerprotocol"
+import pp "github.com/xgfone/go-bt/peerprotocol"
 
 // BlockDownloadHandler is used to downloads the files in the torrent file.
 type BlockDownloadHandler struct {

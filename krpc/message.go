@@ -18,8 +18,8 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/xgfone/bt/bencode"
-	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/go-bt/bencode"
+	"github.com/xgfone/go-bt/metainfo"
 )
 
 // Predefine some error code.

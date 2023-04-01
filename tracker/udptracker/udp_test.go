@@ -22,7 +22,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/go-bt/metainfo"
 )
 
 type testHandler struct{}

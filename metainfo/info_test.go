@@ -89,10 +89,10 @@ func TestNewInfoFromFilePath(t *testing.T) {
 		t.Errorf("invalid info %+v\n", info)
 	}
 
-	info, err = NewInfoFromFilePath("../../bt", PieceSize256KB)
+	info, err = NewInfoFromFilePath("../../go-bt", PieceSize256KB)
 	if err != nil {
 		t.Error(err)
-	} else if info.Name != "bt" || info.Files == nil || info.Length > 0 {
+	} else if info.Name != "go-bt" || info.Files == nil || info.Length > 0 {
 		t.Errorf("invalid info %+v\n", info)
 	}
 }

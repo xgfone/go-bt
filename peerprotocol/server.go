@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xgfone/bt/metainfo"
+	"github.com/xgfone/go-bt/metainfo"
 )
 
 // Handler is used to handle the incoming peer connection.
