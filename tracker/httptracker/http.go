@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2020 xgfone, 2023 idk
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,8 +31,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/xgfone/bt/bencode"
-	"github.com/xgfone/bt/metainfo"
+	"github.com/eyedeekay/go-i2p-bt/bencode"
+	"github.com/eyedeekay/go-i2p-bt/metainfo"
 )
 
 // AnnounceRequest is the tracker announce requests.

@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2020 xgfone, 2023 idk
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import (
 	"io"
 	"sort"
 
-	"github.com/xgfone/bt/utils"
+	"github.com/eyedeekay/go-i2p-bt/utils"
 )
 
 // Predefine some sizes of the pieces.

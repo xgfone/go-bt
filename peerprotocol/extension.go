@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2020 xgfone, 2023 idk
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import (
 	"net"
 
 	"github.com/eyedeekay/i2pkeys"
-	"github.com/xgfone/bt/bencode"
+	"github.com/eyedeekay/go-i2p-bt/bencode"
 )
 
 var errInvalidIP = errors.New("invalid ipv4 or ipv6")

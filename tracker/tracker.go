@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2020 xgfone, 2023 idk
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,9 +26,9 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/xgfone/bt/metainfo"
-	"github.com/xgfone/bt/tracker/httptracker"
-	"github.com/xgfone/bt/tracker/udptracker"
+	"github.com/eyedeekay/go-i2p-bt/metainfo"
+	"github.com/eyedeekay/go-i2p-bt/tracker/httptracker"
+	"github.com/eyedeekay/go-i2p-bt/tracker/udptracker"
 )
 
 // Predefine some announce events.

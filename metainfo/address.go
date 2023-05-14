@@ -1,4 +1,4 @@
-// Copyright 2020 xgfone
+// Copyright 2020 xgfone, 2023 idk
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,8 @@ import (
 	"strings"
 
 	"github.com/eyedeekay/i2pkeys"
-	"github.com/xgfone/bt/bencode"
-	"github.com/xgfone/bt/utils"
+	"github.com/eyedeekay/go-i2p-bt/bencode"
+	"github.com/eyedeekay/go-i2p-bt/utils"
 )
 
 // ErrInvalidAddr is returned when the compact address is invalid.
