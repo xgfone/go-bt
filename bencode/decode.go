@@ -17,6 +17,12 @@ var (
 	reflectStringType    = reflect.TypeOf("")
 )
 
+type _FromStringer interface {
+	FromString(string) error
+}
+
+var _FromStringerType = reflect.TypeOf((*_FromStringer)(nil)).Elem()
+
 // Unmarshaler is the interface implemented by types that can unmarshal
 // a bencode description of themselves.
 // The input can be assumed to be a valid encoding of a bencode value.
@@ -102,10 +108,12 @@ func NewDecoder(r io.Reader) *Decoder {
 // Decode reads the bencoded value from its input and stores it in the value pointed to by val.
 // Decode allocates maps/slices as necessary with the following additional rules:
 // To decode a bencoded value into a nil interface value, the type stored in the interface value is one of:
-// 	int64 for bencoded integers
-// 	string for bencoded strings
-// 	[]interface{} for bencoded lists
-// 	map[string]interface{} for bencoded dicts
+//
+//	int64 for bencoded integers
+//	string for bencoded strings
+//	[]interface{} for bencoded lists
+//	map[string]interface{} for bencoded dicts
+//
 // To unmarshal bencode into a value implementing the Unmarshaler interface,
 // Unmarshal calls that value's UnmarshalBencode method.
 // Otherwise, if the value implements encoding.TextUnmarshaler
@@ -453,6 +461,7 @@ func (d *Decoder) decodeDict(v reflect.Value) error {
 	// check for correct type
 	var (
 		mapElem reflect.Value
+		keyer   reflect.Type
 		isMap   bool
 		vals    map[string]reflect.Value
 	)
@@ -460,8 +469,12 @@ func (d *Decoder) decodeDict(v reflect.Value) error {
 	switch v.Kind() {
 	case reflect.Map:
 		t := v.Type()
-		if t.Key() != reflectStringType {
-			return fmt.Errorf("Can't store a map[string]interface{} into %s", v.Type())
+		if ktype := t.Key(); ktype != reflectStringType {
+			if reflect.New(ktype).Type().Implements(_FromStringerType) {
+				keyer = ktype
+			} else {
+				return fmt.Errorf("Can't store a map[string]interface{} into %s", v.Type())
+			}
 		}
 		if v.IsNil() {
 			v.Set(reflect.MakeMap(t))
@@ -482,6 +495,7 @@ func (d *Decoder) decodeDict(v reflect.Value) error {
 	)
 
 	for {
+		var mkey reflect.Value
 		var subv reflect.Value
 
 		// peek the next value type
@@ -510,6 +524,16 @@ func (d *Decoder) decodeDict(v reflect.Value) error {
 		if isMap {
 			mapElem.Set(reflect.Zero(v.Type().Elem()))
 			subv = mapElem
+
+			if keyer == nil {
+				mkey = reflect.ValueOf(key)
+			} else {
+				mkey = reflect.New(keyer)
+				if err = mkey.Interface().(_FromStringer).FromString(key); err != nil {
+					return err
+				}
+				mkey = mkey.Elem()
+			}
 		} else {
 			subv = vals[key]
 		}
@@ -531,7 +555,7 @@ func (d *Decoder) decodeDict(v reflect.Value) error {
 		}
 
 		if isMap {
-			v.SetMapIndex(reflect.ValueOf(key), subv)
+			v.SetMapIndex(mkey, subv)
 		}
 	}
 }
