@@ -342,7 +342,22 @@ func (t *Client) Scrape(c context.Context, infohashes []metainfo.Hash) (resp Scr
 	for i, h := range infohashes {
 		hs[i] = h.BytesString()
 	}
-
-	err = t.send(c, t.ScrapeURL, url.Values{"info_hash": hs}, &resp)
+	tmpResp := struct {
+		FailureReason string                          `bencode:"failure_reason,omitempty"`
+		Files         map[string]ScrapeResponseResult `bencode:"files,omitempty"`
+	}{}
+	if err = t.send(c, t.ScrapeURL, url.Values{"info_hash": hs}, &tmpResp); err != nil {
+		return
+	}
+	resp.FailureReason = tmpResp.FailureReason
+	resp.Files = make(map[metainfo.Hash]ScrapeResponseResult, len(tmpResp.Files))
+	for k, v := range tmpResp.Files {
+		kbytes := []byte(k)
+		if len(kbytes) != metainfo.HashSize {
+			continue
+		}
+		ih := metainfo.NewHash(kbytes)
+		resp.Files[ih] = v
+	}
 	return
 }
