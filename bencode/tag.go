@@ -50,12 +50,6 @@ func isValidTag(key string) bool {
 	return true
 }
 
-func matchName(key string) func(string) bool {
-	return func(s string) bool {
-		return strings.ToLower(key) == strings.ToLower(s)
-	}
-}
-
 func isEmptyValue(v reflect.Value) bool {
 	switch v.Kind() {
 	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
