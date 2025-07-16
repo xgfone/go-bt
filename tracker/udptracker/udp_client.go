@@ -307,5 +307,8 @@ func (utc *Client) scrape(c context.Context, ihs []metainfo.Hash) (rs []ScrapeRe
 //  2. If returning an error, you should retry it.
 //     See http://www.bittorrent.org/beps/bep_0015.html#time-outs
 func (utc *Client) Scrape(c context.Context, hs []metainfo.Hash) ([]ScrapeResponse, error) {
+	if len(hs) > 74 {
+		return nil, errors.New("only 74 hashes can be scraped on a UDP tracker due to UDP limitations")
+	}
 	return utc.scrape(c, hs)
 }
