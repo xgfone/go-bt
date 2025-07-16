@@ -112,7 +112,7 @@ func NewDecoder(r io.Reader) *Decoder {
 //	int64 for bencoded integers
 //	string for bencoded strings
 //	[]interface{} for bencoded lists
-//	map[string]interface{} for bencoded dicts
+//	map[string]interface{} or map[interface{ FromString(string) error }]interface{} for bencoded dicts
 //
 // To unmarshal bencode into a value implementing the Unmarshaler interface,
 // Unmarshal calls that value's UnmarshalBencode method.
